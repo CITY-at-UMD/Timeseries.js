@@ -1,0 +1,13 @@
+{
+  "name": "Timeseries",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "data-forge": "^1.7.2",
+    "data-forge-fs": "^0.0.6",
+    "dayjs": "^1.8.14",
+    "distributions": "^2.0.0",
+    "simple-statistics": "^7.0.2"
+  }
+}
