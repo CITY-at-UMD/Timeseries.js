@@ -1,7 +1,9 @@
 const { DataFrame, Series } = require("data-forge");
 const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
+const isEqual = require("lodash/isEqual");
 const { rosnerTest } = require("./Timeseries.statistics.js");
+const { gapExists, gapFill } = require("./Timeseries.fill.js");
 const modZScore = (value, mad, median) => {
 	return (0.6745 * (value - median)) / mad;
 };
@@ -23,88 +25,11 @@ const filter = (value, lowerThreshold, upperThreshold) => {
 	}
 };
 
-const gapFill = (
-	sourceColumnName,
-	destinationColumnName,
-	fillType,
-	interval,
-	{ overrideValue } = {}
-) => (pairA, pairB) => {
-	// Fill values forward.
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	const gapSize = dayjs(endDate).diff(startDate) / interval;
-	const numEntries = gapSize - 1;
-	const startValue = pairA[1];
-	const endValue = pairB[1];
-	const newEntries = [];
-	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-		let adjustment;
-		let date = dayjs(startDate)
-			.add(interval * (entryIndex + 1), "milliseconds")
-			.toDate();
-		if (fillType === "pad") {
-			let val = startValue[sourceColumnName];
-			if (overrideValue) val = overrideValue;
-			adjustment = {
-				date,
-				[destinationColumnName]: val
-			};
-		} else if (fillType === "interpolate") {
-			let val =
-				startValue[sourceColumnName] +
-				(entryIndex + 1) *
-					((endValue[sourceColumnName] -
-						startValue[sourceColumnName]) /
-						numEntries);
-			if (overrideValue) val = overrideValue;
-			adjustment = {
-				date,
-				[destinationColumnName]: val
-			};
-		} else if (fillType === "average") {
-			let val =
-				(startValue[sourceColumnName] + endValue[sourceColumnName]) /
-				numEntries;
-			if (overrideValue) val = overrideValue / numEntries;
-			adjustment = {
-				date,
-				[destinationColumnName]: val
-			};
-		} else {
-			adjustment = { date, [destinationColumnName]: null };
-		}
-
-		let e = [date, adjustment];
-		newEntries.push(e);
-	}
-	return newEntries;
-};
-const gapExists = (interval, maxGap) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	const gapSize = dayjs(endDate).diff(startDate);
-	if (maxGap && maxGap > gapSize) return false;
-	if (gapSize > interval) return true;
-	return false;
-};
 const valueSelect = (row, order) => {
 	return order.map(o => row[o]).reduce((a, b) => a || b);
 };
 class Timeseries {
-	constructor(ts, { columnOrder, outlierBounds } = {}) {
-		const valueColumns = [
-			"value",
-			"clean",
-			"fill",
-			"predicted",
-			"normalized",
-			"mean",
-			"raw"
-		];
-		this.order = valueColumns;
-		// let columnNames = Object.keys(ts[0]),
-		// 	rows = ts.map(r => Object.values(r));
+	constructor(ts, { outlierBounds } = {}) {
 		// DataFrame or Timeseries Check
 		if (ts instanceof Series) ts = new DataFrame(ts);
 		if (ts instanceof DataFrame) ts = ts.toArray();
@@ -118,22 +43,31 @@ class Timeseries {
 
 		if (ts.length === 0) {
 			this.df = new DataFrame({
-				columnNames: ["date", ...valueColumns],
+				columnNames: ["date", "value", "flag"],
 				values: []
-			}).bake();
+			})
+				.setIndex("date")
+				// .withIndex(row => row.date.valueOf())
+				.dropSeries("date")
+				.bake();
 			return;
 		}
-
+		// let allcolumns = [
+		// 	...ts.map(r => Object.keys(r)).reduce((a, b) => a.concat(...b), [])
+		// ];
+		let columnNames = [
+			...new Set([...Object.keys(ts[0]), "date", "value", "flag"])
+		];
 		this.df = new DataFrame({
-			columnNames: ["date", ...valueColumns],
+			columnNames,
 			values: ts
 		})
-			.withIndex(row => row.date.valueOf())
+			.withIndex(row => dayjs(row.date).valueOf())
 			// .withIndex(row => row.date)
-			.distinct(row => row.date)
-			.orderBy(row => row.date)
+			// .distinct(row => row.date)
+			.orderBy(row => dayjs(row.date).valueOf())
+			.dropSeries("date")
 			.bake();
-		// .dropSeries("date");
 	}
 	get first() {
 		return this.df.first();
@@ -148,7 +82,7 @@ class Timeseries {
 		return this.tsInterval;
 	}
 	get length() {
-		return this.df.getSeries("date").count();
+		return this.df.getIndex().count();
 	}
 	get count() {
 		return this.length;
@@ -165,14 +99,14 @@ class Timeseries {
 		}
 		const intervals = this.df
 			.between(startDate, endDate)
-			.getSeries("date")
+			.getIndex()
 			.window(2)
 			.select(computeInterval)
 			.detectValues()
 			.orderBy(row => row.Frequency);
 		this.tsInterval = intervals.last().Value;
 	}
-	detectOutliers(column, k) {
+	detectOutliers(column = "value", k) {
 		let values = this.df.deflate(row => row[column]);
 		if (!k) {
 			k =
@@ -180,27 +114,34 @@ class Timeseries {
 					? Math.floor(values.count() * 0.15)
 					: Math.min(...[1000, Math.floor(values.count() * 0.02)]);
 		}
-		console.log(k);
 		let { outliers, threshold } = rosnerTest(values.toArray(), k);
+		this.setOutlierThreshold(threshold);
 		return { outliers, threshold };
 	}
-	setOutlierBounds() {
-		this.outlierBounds = { min: 0, max: 10000 };
+	setOutlierThreshold({ lower, upper } = {}) {
+		this.thresholds = { lower, upper };
 	}
-	toArray() {
-		return this.df
-			.generateSeries({
-				value: row => valueSelect(row, this.order)
-			})
-			.select(row => ({ date: row.date, value: row.value }))
-			.toArray();
+	toArray(columnName) {
+		if (columnName) {
+			return this.df
+				.getSeries(columnName)
+				.toPairs()
+				.map(([date, values]) =>
+					Object.assign({}, { date: new Date(date) }, values)
+				);
+		} else {
+			return this.df
+				.toPairs()
+				.map(([date, values]) =>
+					Object.assign({}, { date: new Date(date) }, values)
+				);
+		}
 	}
-	toArrayFull() {
-		return this.df.toArray();
-	}
-	calcStats(column) {
-		const series = this.df.deflate(row => row[column]);
-		// console.log(values);
+
+	calcStats(columnName) {
+		const series = this.df
+			.deflate(row => row[columnName])
+			.where(value => value && !isNaN(value));
 		let median = series.median();
 		let mean = series.average();
 		let count = series.count();
@@ -212,44 +153,79 @@ class Timeseries {
 		let q3 = quantile(series.toArray(), 0.75);
 		let iqr = q3 - q1;
 		this.stats = Object.assign({}, this.stats, {
-			[column]: { median, mean, count, std, min, max, mad, q1, q3, iqr }
+			[columnName]: {
+				median,
+				mean,
+				count,
+				std,
+				min,
+				max,
+				mad,
+				q1,
+				q3,
+				iqr
+			}
 		});
 		return;
 	}
-	testClean(column) {
-		if (!this.stats[column]) this.calcStats(column);
-		const series = this.df.deflate(row => row[column]);
-		let dirtyZ = series.where(
-			value =>
-				Math.abs(
-					modZScore(
-						value,
-						this.stats[column].mad,
-						this.stats[column].median
-					)
-				) > 3.5
-		);
-		console.log(dirtyZ.count(), dirtyZ.min());
 
-		let dirtyQ = series.where(
-			value => value > this.stats[column].q3 + 3 * this.stats[column].iqr
-		);
-		console.log(dirtyQ.count(), dirtyQ.min());
-	}
 	summarize(toString = false) {
 		const summary = this.df.dropSeries("date").summarize();
 		return summary;
 	}
-	clean(param, lowerThreshold, upperThreshold) {
-		this.df = this.df
-			.generateSeries({
-				clean: row => filter(row[param], lowerThreshold, upperThreshold)
-			})
-			.bake();
+	/**
+	 * Clean Timerseies
+	 * @param  {Number} options.lower lower threshold
+	 * @param  {Number} options.upper upper threshold
+	 * @return {}               cleaned data dataframe
+	 */
+	clean({ lower, upper } = {}) {
+		if (!lower || lower === false || !upper || upper === false) {
+			if (!this.thresholds) this.detectOutliers("value");
+			lower = this.thresholds.lower;
+			upper = this.thresholds.upper;
+		}
+
+		const filterValue = (value, lower, upper) => {
+			if (value < lower || value >= upper) {
+				return true;
+			}
+			return false;
+		};
+		this.df = this.df.generateSeries({
+			raw: row =>
+				filterValue(row.value, lower, upper)
+					? [...(row.flag || []), "clean"]
+					: row.flag,
+			flag: row =>
+				filterValue(row.value, lower, upper)
+					? [...(row.flag || []), "clean"]
+					: row.flag,
+			value: row => (filterValue(row.value, lower, upper) ? 0 : row.value)
+		});
 		return;
 	}
-	quality() {}
-	addMonthlyMean() {}
+	dataStatistics() {
+		let changes = this.df
+			.getSeries("flag")
+			.detectValues()
+			.groupBy(row =>
+				Array.isArray(row.Value) ? row.Value.toString() : row.Value
+			)
+			.select(group => ({
+				Value: group.first().Value,
+				Frequency: group.deflate(row => row.Frequency).sum()
+			}))
+			.inflate();
+		let analysis = changes.toArray().reduce(
+			(a, b) =>
+				Object.assign({}, a, {
+					[b.Value ? b.Value[0] : "available"]: b.Frequency
+				}),
+			{}
+		);
+		return analysis;
+	}
 	// NOTE: Potentially this should collapse the values to a single one before the downsampling
 	// or have an option to do this as the data fidelity is then lost when downsampling
 	//  and then collapsing between all the options
@@ -280,7 +256,6 @@ class Timeseries {
 	static upsample(
 		dataframe,
 		sourceColumnName = "raw",
-		destinationColumnName = "fill",
 		fillType = "average",
 		interval = 3.6e6,
 		options
@@ -289,24 +264,14 @@ class Timeseries {
 		let df = dataframe
 			.fillGaps(
 				gapExists(interval),
-				gapFill(
-					sourceColumnName,
-					destinationColumnName,
-					fillType,
-					interval,
-					options
-				)
+				gapFill(sourceColumnName, fillType, interval, options)
 			)
-			.withIndex(row => row.date.valueOf())
+			// .withIndex(row => row.date.valueOf())
 			.bake();
 		return new Timeseries(df);
 	}
-	fill(type = "pad", interval) {
-		if (!interval) interval = this.interval;
-		// this.upsample("fill", type, interval);
-		return;
-	}
-	filter(start, end) {
+
+	between(start, end) {
 		// inclusive
 		this.df = this.df.between(start, end);
 		return;

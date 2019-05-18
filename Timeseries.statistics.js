@@ -6,10 +6,14 @@ var { Studentt } = require("distributions");
 function rval(df) {
 	let values = df.getSeries("x").toArray();
 	let std = stats.sampleStandardDeviation(values);
-	let xbar = stats.mean(values);
-	let ndf = df.generateSeries({ ares: row => Math.abs(row.x - xbar) / std });
+	let mean = stats.mean(values);
+	if (std === 0) {
+		let ndf = df.generateSeries({ ares: row => 0 });
+		return { R: 0, std, mean, df: ndf };
+	}
+	let ndf = df.generateSeries({ ares: row => Math.abs(row.x - mean) / std });
 	let R = ndf.getSeries("ares").max();
-	return { R, df: ndf, std, mean: xbar };
+	return { R, df: ndf, std, mean };
 }
 
 function pValue(n, i, alpha) {
@@ -31,9 +35,8 @@ function lambdaTest(n, i, alpha) {
 }
 function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 	let dataframe = new DataFrame({
-		values: dataset.map((x, index) => ({ x, index }))
+		values: dataset.map(x => ({ x }))
 	});
-
 	let n = dataframe.getSeries("x").count();
 	let newdf;
 	let i = 1;
@@ -70,6 +73,7 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 		pair = Object.assign({}, pair, { lambda });
 		outliers.push(pair);
 		if (trip && pair.R > pair.lambda) trip = false;
+		if (pair.R === 0) break;
 		if (pair.R < pair.lambda) {
 			if (trip) {
 				break;
@@ -84,13 +88,16 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 			outlier: row => row.R > row.lambda
 		})
 		.takeWhile(row => row.outlier);
-
+	let outlierValues = outliers
+		.where(row => row.Value > 0)
+		.deflate(row => row.Value);
+	let threshold = {
+		lower: 0,
+		upper: outlierValues.count() > 0 ? outlierValues.min() : Infinity
+	};
 	return {
 		outliers,
-		threshold: {
-			min: 0,
-			max: outliers.getSeries("Value").min()
-		}
+		threshold
 	};
 }
 module.exports = { rosnerTest };
