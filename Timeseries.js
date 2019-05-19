@@ -43,7 +43,7 @@ class Timeseries {
 			// .withIndex(row => row.date)
 			// .distinct(row => row.date)
 			.orderBy(row => dayjs(row.date).valueOf())
-			.dropSeries("date")
+			// .dropSeries("date")
 			.bake();
 	}
 	get first() {
@@ -157,11 +157,11 @@ class Timeseries {
 	 * @return {}               cleaned data dataframe
 	 */
 	clean({ lower, upper } = {}) {
-		if (!lower || lower === false || !upper || upper === false) {
-			if (!this.thresholds) this.detectOutliers("value");
-			lower = this.thresholds.lower;
-			upper = this.thresholds.upper;
-		}
+		// if (!lower || lower === false || !upper || upper === false) {
+		// 	if (!this.thresholds) this.detectOutliers("value");
+		// 	lower = this.thresholds.lower;
+		// 	upper = this.thresholds.upper;
+		// }
 
 		const filterValue = (value, lower, upper) => {
 			if (value < lower || value >= upper) {
@@ -169,16 +169,16 @@ class Timeseries {
 			}
 			return false;
 		};
+		console.log(lower, upper);
 		this.df = this.df.generateSeries({
 			raw: row =>
-				filterValue(row.value, lower, upper)
-					? [...(row.flag || []), "clean"]
-					: row.flag,
+				filterValue(row.value, lower, upper) ? row.value : null,
 			flag: row =>
 				filterValue(row.value, lower, upper)
 					? [...(row.flag || []), "clean"]
 					: row.flag,
-			value: row => (filterValue(row.value, lower, upper) ? 0 : row.value)
+			value: row =>
+				filterValue(row.value, lower, upper) ? null : row.value
 		});
 		return;
 	}
@@ -280,6 +280,21 @@ class Timeseries {
 		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
 		let df = DataFrame.concat(dataframes);
 		return new Timeseries(df);
+	}
+	group(interval = "day", toArray = true) {
+		if (["hour", "day", "week", "month", "year"].indexOf(interval) < 0)
+			throw new Error("interval type not supported");
+		let dateComparison = row => dayjs(row.date).startOf(interval);
+		let series = this.df.groupBy(dateComparison);
+		if (toArray) {
+			let groups = [];
+			for (const g of series) {
+				groups.push([dateComparison(g.first()).toDate(), g.toArray()]);
+			}
+			return groups;
+		} else {
+			return series;
+		}
 	}
 }
 module.exports = Timeseries;

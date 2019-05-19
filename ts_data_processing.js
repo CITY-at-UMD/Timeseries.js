@@ -46,14 +46,14 @@ function dfTest() {
 		})),
 		{ date: new Date(2019, 2), value: 44 }
 	]);
-	console.log(df.df.toString());
 	df.clean({ lower: 0, upper: 50 });
-	df = Timeseries.upsample(df.df, "value", "interpolate", 3.6e6);
-	console.log(df.df.toString());
-	// console.log(df.df.summarize());
-	df.dataStatistics();
+	// df = Timeseries.upsample(df.df, "value", "interpolate", 3.6e6);
+
+	let months = df.group("day");
+	console.log(months[0]);
+	console.log(months[0][1]);
 }
-// dfTest();
+dfTest();
 
 function zeroTest() {
 	let df = dataForge
@@ -62,4 +62,3 @@ function zeroTest() {
 	let ts = new Timeseries(df);
 	ts.zeroGrouping("value");
 }
-
