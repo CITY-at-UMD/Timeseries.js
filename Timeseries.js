@@ -100,22 +100,21 @@ class Timeseries {
 	}
 	toArray(columnName) {
 		if (columnName) {
-			return this.df
-				.getSeries(columnName)
-				.toPairs()
-				.map(([date, values]) =>
-					Object.assign({}, { date: new Date(date) }, values)
-				);
+			return this.df.getSeries(columnName).toArray();
+			// .toPairs()
+			// .map(([date, values]) =>
+			// 	Object.assign({}, { date: new Date(date) }, values)
+			// );
 		} else {
-			return this.df
-				.toPairs()
-				.map(([date, values]) =>
-					Object.assign({}, { date: new Date(date) }, values)
-				);
+			return this.df.toArray();
+			// .toPairs()
+			// .map(([date, values]) =>
+			// 	Object.assign({}, { date: new Date(date) }, values)
+			// );
 		}
 	}
 
-	calcStats(columnName) {
+	calculateStatistics(columnName = "value") {
 		const series = this.df
 			.deflate(row => row[columnName])
 			.where(value => value && !isNaN(value));
@@ -129,21 +128,19 @@ class Timeseries {
 		let q1 = quantile(series.toArray(), 0.25);
 		let q3 = quantile(series.toArray(), 0.75);
 		let iqr = q3 - q1;
-		this.stats = Object.assign({}, this.stats, {
-			[columnName]: {
-				median,
-				mean,
-				count,
-				std,
-				min,
-				max,
-				mad,
-				q1,
-				q3,
-				iqr
-			}
-		});
-		return;
+		let stats = {
+			median,
+			mean,
+			count,
+			std,
+			min,
+			max,
+			mad,
+			q1,
+			q3,
+			iqr
+		};
+		return stats;
 	}
 
 	summarize(toString = false) {
@@ -232,12 +229,20 @@ class Timeseries {
 	}
 	static upsample(
 		dataframe,
-		sourceColumnName = "raw",
+		sourceColumnName = "value",
 		fillType = "average",
-		interval = 3.6e6,
+		interval = "hour",
 		options
 	) {
+		if (!(dataframe instanceof DataFrame))
+			dataframe = new Timeseries(dataframe);
 		if (dataframe instanceof Timeseries) dataframe = dataframe.df;
+		if (
+			["quarterHour", "hour", "day", "week", "month", "year"].indexOf(
+				interval
+			) < 0
+		)
+			throw new Error("interval type not supported");
 		let df = dataframe
 			.fillGaps(
 				gapExists(interval),

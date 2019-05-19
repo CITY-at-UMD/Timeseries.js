@@ -1,6 +1,6 @@
 {
   "name": "Timeseries",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
@@ -10,6 +10,8 @@
     "distributions": "^2.0.0",
     "simple-statistics": "^7.0.2"
   },
+  "main": "Timeseries.js",
+  "module": "Timeseries.js",
   "devDependencies": {
     "jest": "^24.8.0"
   },

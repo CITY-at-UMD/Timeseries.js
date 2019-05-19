@@ -95,9 +95,11 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 		lower: 0,
 		upper: outlierValues.count() > 0 ? outlierValues.min() : Infinity
 	};
+	if (i === k) console.error("There may be more outliers");
 	return {
 		outliers,
-		threshold
+		threshold,
+		iterations: i
 	};
 }
 const modZScore = (value, mad, median) => {
