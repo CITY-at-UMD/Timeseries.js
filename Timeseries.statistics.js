@@ -100,4 +100,8 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 		threshold
 	};
 }
-module.exports = { rosnerTest };
+const modZScore = (value, mad, median) => {
+	return (0.6745 * (value - median)) / mad;
+};
+
+module.exports = { rosnerTest, modZScore };

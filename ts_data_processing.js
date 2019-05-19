@@ -37,7 +37,7 @@ function test() {
 			.count()
 	);
 }
-test();
+// test();
 function dfTest() {
 	let df = new Timeseries([
 		...new Array(8760).fill(0).map((v, i) => ({
@@ -54,3 +54,12 @@ function dfTest() {
 	df.dataStatistics();
 }
 // dfTest();
+
+function zeroTest() {
+	let df = dataForge
+		.readFileSync("./88_steam.csv")
+		.parseCSV({ dynamicTyping: true });
+	let ts = new Timeseries(df);
+	ts.zeroGrouping("value");
+}
+

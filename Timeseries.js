@@ -2,32 +2,9 @@ const { DataFrame, Series } = require("data-forge");
 const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
-const { rosnerTest } = require("./Timeseries.statistics.js");
+const { rosnerTest, modZScore } = require("./Timeseries.statistics.js");
 const { gapExists, gapFill } = require("./Timeseries.fill.js");
-const modZScore = (value, mad, median) => {
-	return (0.6745 * (value - median)) / mad;
-};
 
-const filter = (value, lowerThreshold, upperThreshold) => {
-	if (
-		value == null ||
-		value === false ||
-		value === undefined ||
-		isNaN(value)
-	) {
-		return null;
-	} else if (value < lowerThreshold) {
-		return lowerThreshold;
-	} else if (value > upperThreshold) {
-		return upperThreshold;
-	} else {
-		return value;
-	}
-};
-
-const valueSelect = (row, order) => {
-	return order.map(o => row[o]).reduce((a, b) => a || b);
-};
 class Timeseries {
 	constructor(ts, { outlierBounds } = {}) {
 		// DataFrame or Timeseries Check
@@ -46,9 +23,9 @@ class Timeseries {
 				columnNames: ["date", "value", "flag"],
 				values: []
 			})
-				.setIndex("date")
-				// .withIndex(row => row.date.valueOf())
-				.dropSeries("date")
+				// .setIndex("date")
+				.withIndex(row => row.date.valueOf())
+				// .dropSeries("date")
 				.bake();
 			return;
 		}
