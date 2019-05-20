@@ -207,8 +207,14 @@ class Timeseries {
 		if (!(dataframe instanceof DataFrame))
 			dataframe = new Timeseries(dataframe);
 		if (dataframe instanceof Timeseries) dataframe = dataframe.df;
-		if (["hour", "day", "week", "month", "year"].indexOf(interval) < 0)
+		if (
+			["quarterHour", "hour", "day", "week", "month", "year"].indexOf(
+				interval
+			) < 0
+		) {
+			console.error(interval);
 			throw new Error("interval type not supported");
+		}
 		let dateComparison = row => dayjs(row.date).startOf(interval);
 		let df = dataframe
 			.groupBy(dateComparison)

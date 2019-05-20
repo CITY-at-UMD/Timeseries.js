@@ -36,15 +36,14 @@ const gapFill = (
 	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
 		let adjustment, date;
 		if (interval === "quarterHour") {
-			let date = dayjs(startDate)
+			date = dayjs(startDate)
 				.add((entryIndex + 1) * 15, "minutes")
 				.toDate();
 		} else {
-			let date = dayjs(startDate)
+			date = dayjs(startDate)
 				.add(entryIndex + 1, interval)
 				.toDate();
 		}
-
 		if (fillType === "pad") {
 			let value = startValue[sourceColumnName];
 			if (overrideValue) value = overrideValue;
