@@ -117,7 +117,7 @@ class Timeseries {
 	calculateStatistics(columnName = "value") {
 		const series = this.df
 			.deflate(row => row[columnName])
-			.where(value => value && !isNaN(value));
+			.where(value => !isNaN(value));
 		let median = series.median();
 		let mean = series.average();
 		let count = series.count();
