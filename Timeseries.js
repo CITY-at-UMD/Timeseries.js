@@ -10,7 +10,7 @@ class Timeseries {
 		// DataFrame or Timeseries Check
 		if (ts instanceof Series) ts = new DataFrame(ts);
 		if (ts instanceof DataFrame) ts = ts.toArray();
-		if (ts instanceof Timeseries) ts = ts.toArrayFull();
+		if (ts instanceof Timeseries) ts = ts.toArray();
 		if (!Array.isArray(ts)) {
 			console.error(ts);
 			throw new Error("timeseries input was not a collection");
@@ -241,8 +241,10 @@ class Timeseries {
 			["quarterHour", "hour", "day", "week", "month", "year"].indexOf(
 				interval
 			) < 0
-		)
+		) {
+			console.error(interval);
 			throw new Error("interval type not supported");
+		}
 		let df = dataframe
 			.fillGaps(
 				gapExists(interval),
