@@ -64,6 +64,17 @@ class Timeseries {
 	get count() {
 		return this.length;
 	}
+	dateRange(unit, options = {}) {
+		let start = dayjs(df.first().date);
+		if (options.adjustment) {
+			start = start.startOf(options.adjustment);
+		}
+		let end = dayjs(df.first().date);
+		if (options.adjustment) {
+			end = end.endOf(options.adjustment);
+		}
+		return end.diff(start, unit);
+	}
 	setInterval(interval) {
 		this.tsInterval = interval;
 		return;
@@ -113,7 +124,10 @@ class Timeseries {
 			// );
 		}
 	}
-
+	sum(columnName = "value") {
+		const sum = this.df.deflate(row => row[columnName]).sum();
+		return sum;
+	}
 	calculateStatistics(columnName = "value") {
 		const series = this.df
 			.deflate(row => row[columnName])
@@ -263,7 +277,7 @@ class Timeseries {
 
 	between(start, end) {
 		// inclusive
-		this.df = this.df.between(start, end);
+		this.df.between(start, end);
 		return;
 	}
 	static merge(...dataframes) {

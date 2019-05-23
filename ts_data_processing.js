@@ -46,14 +46,21 @@ function dfTest() {
 		})),
 		{ date: new Date(2019, 2), value: 44 }
 	]);
-	df.clean({ lower: 0, upper: 50 });
-	// df = Timeseries.upsample(df.df, "value", "interpolate", 3.6e6);
+	console.log(df.length);
+	df.between(new Date(2018, 2), new Date(2018, 4));
+	console.log(df.length);
+	let zdf = new Timeseries([]);
+	console.log(zdf.length);
+	zdf.between(new Date(2018, 2), new Date(2018, 4));
+	console.log(zdf.length);
+	// df.clean({ lower: 0, upper: 50 });
+	// // df = Timeseries.upsample(df.df, "value", "interpolate", 3.6e6);
 
-	let months = df.group("day");
-	console.log(months[0]);
-	console.log(months[0][1]);
+	// let months = df.group("day");
+	// console.log(months[0]);
+	// console.log(months[0][1]);
 }
-dfTest();
+// dfTest();
 
 function zeroTest() {
 	let df = dataForge
@@ -62,3 +69,13 @@ function zeroTest() {
 	let ts = new Timeseries(df);
 	ts.zeroGrouping("value");
 }
+
+let ts = new Timeseries([
+	{ date: new Date(1), value: 12 },
+	{ date: new Date(2), value: 12 },
+	{ date: new Date(3), value: 12 }
+]);
+console.log(ts.length);
+let out = ts.detectOutliers();
+console.log(out);
+console.log(ts.last.date);
