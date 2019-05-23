@@ -4,15 +4,17 @@ const stats = require("simple-statistics");
 var { Studentt } = require("distributions");
 
 function rval(df) {
-	let values = df.getSeries("x").toArray();
+	let values = df.deflate(row => row.x).toArray();
 	let std = stats.sampleStandardDeviation(values);
 	let mean = stats.mean(values);
 	if (std === 0) {
 		let ndf = df.generateSeries({ ares: row => 0 });
 		return { R: 0, std, mean, df: ndf };
 	}
-	let ndf = df.generateSeries({ ares: row => Math.abs(row.x - mean) / std });
-	let R = ndf.getSeries("ares").max();
+	let ndf = new DataFrame({
+		values: values.map(x => ({ x, ares: Math.abs(x - mean) / std }))
+	});
+	let R = Math.max(...ndf.deflate(row => row.ares));
 	return { R, df: ndf, std, mean };
 }
 
@@ -22,7 +24,8 @@ function pValue(n, i, alpha) {
 }
 function tValue(p, degreeOfFreedom) {
 	let qt = new Studentt(degreeOfFreedom);
-	return qt.inv(p);
+	let t = qt.inv(p);
+	return t;
 }
 //
 function lambdaTest(n, i, alpha) {
@@ -44,6 +47,7 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 	let trip = false;
 	while (i <= k) {
 		let pair = {};
+		let s = Date.now();
 		if (i === 1) {
 			let { R, df, mean, std } = rval(dataframe);
 			newdf = df.where(row => row.ares !== R);
@@ -95,7 +99,6 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 		lower: 0,
 		upper: outlierValues.count() > 0 ? outlierValues.min() : Infinity
 	};
-	if (i === k) console.error("There may be more outliers");
 	return {
 		outliers,
 		threshold,

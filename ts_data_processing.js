@@ -6,38 +6,38 @@ require("data-forge-fs");
 
 function test() {
 	let df = dataForge
-		.readFileSync("./88_electricity_5c848e1d2d71b6c3807a616c.csv")
+		.readFileSync("./testData/88_electricity_5c848e1d2d71b6c3807a616c.csv")
 		.parseCSV({ dynamicTyping: true });
 	console.time("timeseries");
 	let ts = new Timeseries(df);
-	ts.calcStats("value");
+	ts.calculateStatistics("value");
 	console.time("rosner");
 	// ts.between(new Date(2015, 0, 0).valueOf(), new Date(2015, 0, 2, 0).valueOf());
-	let { outliers, threshold } = ts.detectOutliers("value", 100);
-	console.log(outliers.toString());
+	let { outliers, threshold } = ts.detectOutliers();
 	console.timeEnd("rosner");
+	console.log(outliers.toString());
 	console.log(ts.thresholds);
-	console.log(
-		ts.df
-			.getSeries("value")
-			.where(value => value >= 23568978)
-			.count()
-	);
-	ts.clean();
-	ts.calcStats("value");
-	ts = Timeseries.upsample(ts.df, "value", "interpolate", 3.6e6 / 4);
-	ts.calcStats("value");
-	console.log(ts.stats);
-	ts.dataStatistics();
-	console.timeEnd("timeseries");
-	console.log(
-		ts.df
-			.getSeries("value")
-			.where(value => value >= 23568978)
-			.count()
-	);
+	// console.log(
+	// 	ts.df
+	// 		.getSeries("value")
+	// 		.where(value => value >= 23568978)
+	// 		.count()
+	// );
+	// ts.clean();
+	// ts.calcStats("value");
+	// ts = Timeseries.upsample(ts.df, "value", "interpolate", 3.6e6 / 4);
+	// ts.calcStats("value");
+	// console.log(ts.stats);
+	// ts.dataStatistics();
+	// console.timeEnd("timeseries");
+	// console.log(
+	// 	ts.df
+	// 		.getSeries("value")
+	// 		.where(value => value >= 23568978)
+	// 		.count()
+	// );
 }
-// test();
+test();
 function dfTest() {
 	let df = new Timeseries([
 		...new Array(8760).fill(0).map((v, i) => ({
@@ -64,18 +64,8 @@ function dfTest() {
 
 function zeroTest() {
 	let df = dataForge
-		.readFileSync("./88_steam.csv")
+		.readFileSync("./testData/88_steam.csv")
 		.parseCSV({ dynamicTyping: true });
 	let ts = new Timeseries(df);
 	ts.zeroGrouping("value");
 }
-
-let ts = new Timeseries([
-	{ date: new Date(1), value: 12 },
-	{ date: new Date(2), value: 12 },
-	{ date: new Date(3), value: 12 }
-]);
-console.log(ts.length);
-let out = ts.detectOutliers();
-console.log(out);
-console.log(ts.last.date);

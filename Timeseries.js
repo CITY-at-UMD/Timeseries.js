@@ -65,11 +65,11 @@ class Timeseries {
 		return this.length;
 	}
 	dateRange(unit, options = {}) {
-		let start = dayjs(df.first().date);
+		let start = dayjs(this.first.date);
 		if (options.adjustment) {
 			start = start.startOf(options.adjustment);
 		}
-		let end = dayjs(df.first().date);
+		let end = dayjs(this.last.date);
 		if (options.adjustment) {
 			end = end.endOf(options.adjustment);
 		}
@@ -180,7 +180,6 @@ class Timeseries {
 			}
 			return false;
 		};
-		console.log(lower, upper);
 		this.df = this.df.generateSeries({
 			raw: row =>
 				filterValue(row.value, lower, upper) ? row.value : null,
@@ -277,7 +276,7 @@ class Timeseries {
 
 	between(start, end) {
 		// inclusive
-		this.df.between(start, end);
+		this.df = this.df.between(start, end);
 		return;
 	}
 	static merge(...dataframes) {
