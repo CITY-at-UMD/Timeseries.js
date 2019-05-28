@@ -187,8 +187,7 @@ class Timeseries {
 				filterValue(row.value, lower, upper)
 					? [...(row.flag || []), "clean"]
 					: row.flag,
-			value: row =>
-				filterValue(row.value, lower, upper) ? null : row.value
+			value: row => (filterValue(row.value, lower, upper) ? 0 : row.value)
 		});
 		return;
 	}
@@ -228,6 +227,13 @@ class Timeseries {
 			console.error(interval);
 			throw new Error("interval type not supported");
 		}
+		let aggregationTypes = ["sum", "avg", "min", "max", "median"];
+		if (aggregationTypes.indexOf(type) === -1) {
+			throw new Error(
+				"aggregation type not suppported, only:",
+				aggregationTypes.toString()
+			);
+		}
 		let dateComparison = row => dayjs(row.date).startOf(interval);
 		let df = dataframe
 			.groupBy(dateComparison)
@@ -239,7 +245,19 @@ class Timeseries {
 				group
 					.getColumnNames()
 					.filter(c => c !== "date")
-					.forEach(c => (o[c] = group.deflate(row => row[c]).sum()));
+					.forEach(c => {
+						if (type === "sum") {
+							o[c] = group.deflate(row => row[c]).sum();
+						} else if (type === "min") {
+							o[c] = group.deflate(row => row[c]).min();
+						} else if (type === "max") {
+							o[c] = group.deflate(row => row[c]).max();
+						} else if (type === "median") {
+							o[c] = group.deflate(row => row[c]).median();
+						} else {
+							o[c] = group.deflate(row => row[c]).average();
+						}
+					});
 				return o;
 			})
 			.inflate()
