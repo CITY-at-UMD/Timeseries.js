@@ -1,6 +1,16 @@
 const dayjs = require("dayjs");
 
-const gapExists = (interval, maxGap) => (pairA, pairB) => {
+const gapExists = ([duration, durationValue], maxGap) => (pairA, pairB) => {
+	const startDate = pairA[0];
+	const endDate = pairB[0];
+	let gapSize = Math.floor(
+		dayjs(endDate).diff(startDate, duration) / durationValue
+	);
+	if (maxGap && maxGap > gapSize) return false;
+	if (gapSize > 0) return true;
+	return false;
+};
+const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
 	let gapSize;
@@ -13,37 +23,45 @@ const gapExists = (interval, maxGap) => (pairA, pairB) => {
 	if (gapSize > 0) return true;
 	return false;
 };
+const gapFillBlank = ([duration, durationValue]) => (pairA, pairB) => {
+	const startDate = pairA[0];
+	const endDate = pairB[0];
+	let gapSize = Math.floor(
+		dayjs(endDate).diff(startDate, duration) / durationValue
+	);
+	const numEntries = gapSize - 1;
+	const newEntries = [];
+
+	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
+		let date = dayjs(startDate)
+			.add((entryIndex + 1) * durationValue, duration)
+			.toDate();
+		newEntries.push([date, { date }]);
+	}
+	return newEntries;
+};
 
 const gapFill = (
 	sourceColumnName,
 	fillType,
-	interval,
+	[duration, durationValue],
 	{ overrideValue } = {}
 ) => (pairA, pairB) => {
 	// Fill values forward.
 	const startDate = pairA[0];
 	const endDate = pairB[0];
-	let gapSize;
-	if (interval === "quarterHour") {
-		gapSize = Math.floor(dayjs(endDate).diff(startDate, "minutes") / 15);
-	} else {
-		gapSize = dayjs(endDate).diff(startDate, interval);
-	}
+	let gapSize = Math.floor(
+		dayjs(endDate).diff(startDate, duration) / durationValue
+	);
 	const numEntries = gapSize - 1;
 	const startValue = pairA[1];
 	const endValue = pairB[1];
 	const newEntries = [];
 	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
 		let adjustment, date;
-		if (interval === "quarterHour") {
-			date = dayjs(startDate)
-				.add((entryIndex + 1) * 15, "minutes")
-				.toDate();
-		} else {
-			date = dayjs(startDate)
-				.add(entryIndex + 1, interval)
-				.toDate();
-		}
+		date = dayjs(startDate)
+			.add((entryIndex + 1) * durationValue, duration)
+			.toDate();
 		if (fillType === "pad") {
 			let value = startValue[sourceColumnName];
 			if (overrideValue) value = overrideValue;
@@ -82,4 +100,4 @@ const gapFill = (
 	return newEntries;
 };
 
-module.exports = { gapExists, gapFill };
+module.exports = { gapExists, gapFill, gapFillBlank };

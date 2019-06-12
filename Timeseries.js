@@ -3,7 +3,7 @@ const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
 const { rosnerTest, modZScore } = require("./Timeseries.statistics.js");
-const { gapExists, gapFill } = require("./Timeseries.fill.js");
+const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill.js");
 
 class Timeseries {
 	constructor(ts, { outlierBounds } = {}) {
@@ -268,15 +268,15 @@ class Timeseries {
 		dataframe,
 		sourceColumnName = "value",
 		fillType = "average",
-		interval = "hour",
+		[duration = "hour", value = 1],
 		options
 	) {
 		if (!(dataframe instanceof DataFrame))
 			dataframe = new Timeseries(dataframe);
 		if (dataframe instanceof Timeseries) dataframe = dataframe.df;
 		if (
-			["quarterHour", "hour", "day", "week", "month", "year"].indexOf(
-				interval
+			["minute", "hour", "day", "week", "month", "year"].indexOf(
+				duration
 			) < 0
 		) {
 			console.error(interval);
@@ -284,8 +284,8 @@ class Timeseries {
 		}
 		let df = dataframe
 			.fillGaps(
-				gapExists(interval),
-				gapFill(sourceColumnName, fillType, interval, options)
+				gapExists([duration, value]),
+				gapFill(sourceColumnName, fillType, [duration, value], options)
 			)
 			// .withIndex(row => row.date.valueOf())
 			.bake();
@@ -324,6 +324,43 @@ class Timeseries {
 		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
 		let df = DataFrame.concat(dataframes);
 		return new Timeseries(df);
+	}
+	/**
+	 * make a blank timeseries
+	 * @param  {Date} startDate Start Date
+	 * @param  {Date} endDate   End Date
+	 * @param  {Array} interval  [duration, value] where duration is string 'see dayjs'
+	 *                           and value is an ajustment of that duration ['minute', 15]
+	 *                           is a 15 min interval
+	 * @return {Timeseries}           Timeseries array with no values
+	 */
+	static blank(startDate, endDate, [duration, value = 1]) {
+		if (
+			["minute", "hour", "day", "week", "month", "year"].indexOf(
+				duration
+			) < 0
+		) {
+			console.error(interval);
+			throw new Error("interval type not supported");
+		}
+		let dataframe = new Timeseries([{ date: startDate }, { date: endDate }])
+			.df;
+		let df = dataframe
+			.fillGaps(
+				gapExists([duration, value]),
+				gapFillBlank([duration, value])
+			)
+			.startAt(startDate)
+			.before(endDate)
+			// .withIndex(row => row.date.valueOf())
+			.bake();
+		return new Timeseries(df);
+	}
+	populate(value) {
+		let v = value / this.df.getIndex().count();
+		let df = this.df.generateSeries({ value: row => v });
+		this.df = df;
+		return;
 	}
 	group(interval = "day", toArray = true) {
 		if (["hour", "day", "week", "month", "year"].indexOf(interval) < 0)
