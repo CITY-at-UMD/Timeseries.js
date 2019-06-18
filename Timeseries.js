@@ -191,6 +191,18 @@ class Timeseries {
 		});
 		return;
 	}
+	reset() {
+		this.df = this.df
+			.withSeries({
+				value: df =>
+					df
+						.deflate(row => (row.flags ? row.raw : row.value))
+						.select(value => value)
+			})
+			.where(row => row.value !== null && !isNaN(row.value))
+			.dropSeries("flags")
+			.dropSeries("raw");
+	}
 	dataStatistics() {
 		let changes = this.df
 			.getSeries("flag")

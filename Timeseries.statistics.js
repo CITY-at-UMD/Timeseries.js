@@ -1,4 +1,7 @@
 // Source: https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h3.htm
+// https://vsp.pnnl.gov/help/Vsample/Rosners_Outlier_Test.htm
+// https://www.itl.nist.gov/div898/handbook/prc/section1/prc16.htm
+
 const { DataFrame } = require("data-forge");
 const stats = require("simple-statistics");
 var { Studentt } = require("distributions");
