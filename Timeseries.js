@@ -5,8 +5,8 @@ const isEqual = require("lodash/isEqual");
 const { rosnerTest, modZScore } = require("./Timeseries.statistics.js");
 const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill.js");
 
-class Timeseries {
-	constructor(ts, { outlierBounds } = {}) {
+class Timeseries extends DataFrame {
+	constructor(ts) {
 		// DataFrame or Timeseries Check
 		if (ts instanceof Series) ts = new DataFrame(ts);
 		if (ts instanceof DataFrame) ts = ts.toArray();
@@ -102,6 +102,7 @@ class Timeseries {
 					? Math.floor(values.count() * 0.15)
 					: Math.min(...[1000, Math.floor(values.count() * 0.02)]);
 		}
+		if (values.count < 5) return {};
 		let { outliers, threshold } = rosnerTest(values.toArray(), k);
 		this.setOutlierThreshold(threshold);
 		return { outliers, threshold };
@@ -112,16 +113,8 @@ class Timeseries {
 	toArray(columnName) {
 		if (columnName) {
 			return this.df.getSeries(columnName).toArray();
-			// .toPairs()
-			// .map(([date, values]) =>
-			// 	Object.assign({}, { date: new Date(date) }, values)
-			// );
 		} else {
 			return this.df.toArray();
-			// .toPairs()
-			// .map(([date, values]) =>
-			// 	Object.assign({}, { date: new Date(date) }, values)
-			// );
 		}
 	}
 	sum(columnName = "value") {

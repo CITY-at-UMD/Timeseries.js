@@ -17,7 +17,7 @@ function rval(df) {
 	let ndf = new DataFrame({
 		values: values.map(x => ({ x, ares: Math.abs(x - mean) / std }))
 	});
-	let R = Math.max(...ndf.deflate(row => row.ares));
+	let R = stats.max(ndf.deflate(row => row.ares).toArray());
 	return { R, df: ndf, std, mean };
 }
 
