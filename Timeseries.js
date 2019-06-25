@@ -3,10 +3,17 @@ const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
 const { rosnerTest, modZScore } = require("./Timeseries.statistics.js");
-const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill.js");
+const {
+	gapExists,
+	gapFill,
+	gapFillBlank,
+	valueFiller
+} = require("./Timeseries.fill.js");
+const { msToInterval } = require("./Timeseries.interval");
 
 class Timeseries extends DataFrame {
 	constructor(ts) {
+		super(ts);
 		// DataFrame or Timeseries Check
 		if (ts instanceof Series) ts = new DataFrame(ts);
 		if (ts instanceof DataFrame) ts = ts.toArray();
@@ -53,10 +60,10 @@ class Timeseries extends DataFrame {
 		return this.df.last();
 	}
 	get interval() {
-		if (!this.tsInterval) {
+		if (!this._interval) {
 			this.calculateInterval();
 		}
-		return this.tsInterval;
+		return this._interval;
 	}
 	get length() {
 		return this.df.getIndex().count();
@@ -75,10 +82,7 @@ class Timeseries extends DataFrame {
 		}
 		return end.diff(start, unit);
 	}
-	setInterval(interval) {
-		this.tsInterval = interval;
-		return;
-	}
+
 	calculateInterval(startDate, endDate) {
 		if (!startDate) startDate = this.first.date;
 		if (!endDate) endDate = this.last.date;
@@ -92,7 +96,9 @@ class Timeseries extends DataFrame {
 			.select(computeInterval)
 			.detectValues()
 			.orderBy(row => row.Frequency);
-		this.tsInterval = intervals.last().Value;
+
+		let val = intervals.last().Value;
+		this._interval = msToInterval(val);
 	}
 	detectOutliers(column = "value", k) {
 		let values = this.df.deflate(row => row[column]);
@@ -154,13 +160,54 @@ class Timeseries extends DataFrame {
 		const summary = this.df.dropSeries("date").summarize();
 		return summary;
 	}
+
+	fillMissing({ start, end } = {}) {
+		if (!start) start = this.first.date;
+		if (!end) end = this.last.date;
+		let full = Timeseries.blank(start, end, this.interval);
+		console.log(full);
+	}
+	zeroCheck(threshold = 2) {
+		let zeroGroups = this.df
+			.variableWindow((a, b) => {
+				return a.value === b.value && a.value === 0;
+			})
+			.where(window => window.getIndex().count() >= threshold);
+		let zeroSummary = zeroGroups
+			.select(window => ({
+				start: window.first().date,
+				end: window.last().date,
+				count: window.count()
+			}))
+			.inflate(); // Series -> dataframe.
+		// .toArray();
+		console.log(zeroSummary.toString());
+		// console.log(zeroGroups.toString());
+	}
+
+	
+
+	fillData(fillType, { value, dateFunction } = {}) {
+		let nullCheck = val => isNaN(val) && !val;
+		let data = this.df.toArray().map(row => ({
+			...row,
+			...((row.value === null || row.value === undefined) &&
+				valueFiller(
+					fillType,
+					{},
+					{ overrideValue: value, date: row.date, dateFunction }
+				))
+		}));
+		this.df = new Timeseries(data);
+		return;
+	}
 	/**
 	 * Clean Timerseies
 	 * @param  {Number} options.lower lower threshold
 	 * @param  {Number} options.upper upper threshold
 	 * @return {}               cleaned data dataframe
 	 */
-	clean({ lower, upper } = {}) {
+	clean({ lower, upper } = {}, fillValue = null) {
 		// if (!lower || lower === false || !upper || upper === false) {
 		// 	if (!this.thresholds) this.detectOutliers("value");
 		// 	lower = this.thresholds.lower;
@@ -174,16 +221,45 @@ class Timeseries extends DataFrame {
 			return false;
 		};
 		this.df = this.df.generateSeries({
-			raw: row =>
-				filterValue(row.value, lower, upper) ? row.value : null,
+			raw: row => (filterValue(row.value, lower, upper) ? row.value : null),
 			flag: row =>
 				filterValue(row.value, lower, upper)
 					? [...(row.flag || []), "clean"]
 					: row.flag,
-			value: row => (filterValue(row.value, lower, upper) ? 0 : row.value)
+			value: row =>
+				filterValue(row.value, lower, upper) ? fillValue : row.value
 		});
 		return;
 	}
+	quality() {
+		let count = this.length;
+		let valid = this.df
+			.getSeries("flag")
+			.where(value => value === null)
+			.count();
+		let missing = this.df
+			.getSeries("flag")
+			.where(value => Array.isArray(value))
+			.where(value => value.indexOf("fill") !== -1)
+			.count();
+		let invalid = this.df
+			.getSeries("flag")
+			.where(value => Array.isArray(value))
+			.where(value => value.indexOf("clean") !== -1)
+			.count();
+		let breakdown = {
+			valid: valid / count,
+			missing: missing / count,
+			invalid: invalid / count
+		};
+		let report = {
+			accuracy: 0,
+			completeness: 0,
+			consistency: 0
+		};
+		return { breakdown, report };
+	}
+
 	reset() {
 		this.df = this.df
 			.withSeries({
@@ -224,11 +300,7 @@ class Timeseries extends DataFrame {
 		if (!(dataframe instanceof DataFrame))
 			dataframe = new Timeseries(dataframe);
 		if (dataframe instanceof Timeseries) dataframe = dataframe.df;
-		if (
-			["quarterHour", "hour", "day", "week", "month", "year"].indexOf(
-				interval
-			) < 0
-		) {
+		if (["quarterHour", "hour", "day", "month", "year"].indexOf(interval) < 0) {
 			console.error(interval);
 			throw new Error("interval type not supported");
 		}
@@ -271,7 +343,6 @@ class Timeseries extends DataFrame {
 	}
 	static upsample(
 		dataframe,
-		sourceColumnName = "value",
 		fillType = "average",
 		[duration = "hour", value = 1],
 		options
@@ -279,18 +350,13 @@ class Timeseries extends DataFrame {
 		if (!(dataframe instanceof DataFrame))
 			dataframe = new Timeseries(dataframe);
 		if (dataframe instanceof Timeseries) dataframe = dataframe.df;
-		if (
-			["minute", "hour", "day", "week", "month", "year"].indexOf(
-				duration
-			) < 0
-		) {
-			console.error(interval);
+		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
 			throw new Error("interval type not supported");
 		}
 		let df = dataframe
 			.fillGaps(
 				gapExists([duration, value]),
-				gapFill(sourceColumnName, fillType, [duration, value], options)
+				gapFill(fillType, [duration, value], options)
 			)
 			// .withIndex(row => row.date.valueOf())
 			.bake();
@@ -340,26 +406,21 @@ class Timeseries extends DataFrame {
 	 * @return {Timeseries}           Timeseries array with no values
 	 */
 	static blank(startDate, endDate, [duration, value = 1]) {
-		if (
-			["minute", "hour", "day", "week", "month", "year"].indexOf(
-				duration
-			) < 0
-		) {
+		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
 			console.error(interval);
 			throw new Error("interval type not supported");
 		}
-		let dataframe = new Timeseries([{ date: startDate }, { date: endDate }])
-			.df;
-		let df = dataframe
-			.fillGaps(
-				gapExists([duration, value]),
-				gapFillBlank([duration, value])
-			)
+		let dataframe = new Timeseries([
+			{ date: new Date(startDate) },
+			{ date: new Date(endDate) }
+		]).df;
+		let blankDF = dataframe
+			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
 			.startAt(startDate)
 			.before(endDate)
-			// .withIndex(row => row.date.valueOf())
-			.bake();
-		return new Timeseries(df);
+			.withIndex(row => row.date.valueOf())
+			.toArray();
+		return new Timeseries(blankDF);
 	}
 	populate(value) {
 		let v = value / this.df.getIndex().count();
@@ -368,7 +429,7 @@ class Timeseries extends DataFrame {
 		return;
 	}
 	group(interval = "day", toArray = true) {
-		if (["hour", "day", "week", "month", "year"].indexOf(interval) < 0)
+		if (["hour", "day", "month", "year"].indexOf(interval) < 0)
 			throw new Error("interval type not supported");
 		let dateComparison = row => dayjs(row.date).startOf(interval);
 		let series = this.df.groupBy(dateComparison);

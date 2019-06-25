@@ -1,12 +1,11 @@
 const dayjs = require("dayjs");
 
-const gapExists = ([duration, durationValue], maxGap) => (pairA, pairB) => {
+const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
 	let gapSize = Math.floor(
-		dayjs(endDate).diff(startDate, duration) / durationValue
+		dayjs(endDate).diff(startDate, duration, true) / durationValue
 	);
-	if (maxGap && maxGap > gapSize) return false;
 	if (gapSize > 0) return true;
 	return false;
 };
@@ -36,16 +35,55 @@ const gapFillBlank = ([duration, durationValue]) => (pairA, pairB) => {
 		let date = dayjs(startDate)
 			.add((entryIndex + 1) * durationValue, duration)
 			.toDate();
-		newEntries.push([date, { date }]);
+		newEntries.push([date.valueOf(), { date }]);
 	}
 	return newEntries;
 };
 
+const valueFiller = (
+	fillType,
+	{ startValue, endValue, entryIndex, numEntries },
+	{ overrideValue, dateFunction, date }
+) => {
+	if (
+		["pad", "interpolate", "average"].indexOf(fillType) !== -1 &&
+		(!startValue || !endValue || !entryIndex || !numEntries)
+	)
+		throw new Error("fill Type not supported without date, index and entries");
+	let value, flag;
+	if (fillType === "pad") {
+		value = startValue.value;
+		if (overrideValue) value = overrideValue;
+
+		flag = ["fill", fillType];
+	} else if (fillType === "interpolate") {
+		value =
+			startValue.value +
+			(entryIndex + 1) * ((endValue.value - startValue.value) / numEntries);
+		if (overrideValue) value = overrideValue;
+
+		flag = ["fill", fillType];
+	} else if (fillType === "average") {
+		value = (startValue.value + endValue.value) / numEntries;
+		if (overrideValue) value = overrideValue / numEntries;
+		flag = ["fill", fillType];
+	} else if (fillType === "dateFunction" && dateFunction) {
+		value = dateFunction(date);
+		flag = ["fill", fillType];
+	} else if (fillType === "value" && !isNaN(overrideValue) && overrideValue) {
+		value = overrideValue;
+		flag = ["fill", fillType];
+	} else {
+		value = null;
+		flag = ["fill"];
+	}
+	return { value, flag };
+};
+
 const gapFill = (
-	sourceColumnName,
 	fillType,
 	[duration, durationValue],
-	{ overrideValue } = {}
+	{ overrideValue, dateFunction } = {}
 ) => (pairA, pairB) => {
 	// Fill values forward.
 	const startDate = pairA[0];
@@ -58,46 +96,22 @@ const gapFill = (
 	const endValue = pairB[1];
 	const newEntries = [];
 	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-		let adjustment, date;
-		date = dayjs(startDate)
-			.add((entryIndex + 1) * durationValue, duration)
-			.toDate();
-		if (fillType === "pad") {
-			let value = startValue[sourceColumnName];
-			if (overrideValue) value = overrideValue;
-			adjustment = {
-				value,
-				flag: ["fill", fillType]
-			};
-		} else if (fillType === "interpolate") {
-			let value =
-				startValue[sourceColumnName] +
-				(entryIndex + 1) *
-					((endValue[sourceColumnName] -
-						startValue[sourceColumnName]) /
-						numEntries);
-			if (overrideValue) value = overrideValue;
-			adjustment = {
-				value,
-				flag: ["fill", fillType]
-			};
-		} else if (fillType === "average") {
-			let value =
-				(startValue[sourceColumnName] + endValue[sourceColumnName]) /
-				numEntries;
-			if (overrideValue) value = overrideValue / numEntries;
-			adjustment = {
-				value,
-				flag: ["fill", fillType]
-			};
-		} else {
-			adjustment = { value: null, flag: ["fill"] };
-		}
+		let adjustment = valueFiller(
+				fillType,
+				{ startValue, endValue, entryIndex, numEntries },
+				{
+					overrideValue,
+					dateFunction
+				}
+			),
+			date = dayjs(startDate)
+				.add((entryIndex + 1) * durationValue, duration)
+				.toDate();
 
-		let e = [date.valueOf(), adjustment];
+		let e = [date.valueOf(), Object.assign({}, adjustment, { date })];
 		newEntries.push(e);
 	}
 	return newEntries;
 };
 
-module.exports = { gapExists, gapFill, gapFillBlank };
+module.exports = { gapExists, gapFill, gapFillBlank, valueFiller };
