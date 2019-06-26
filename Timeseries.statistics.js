@@ -199,22 +199,25 @@ function quality(df) {
 		.where(value => Array.isArray(value))
 		.where(value => value.indexOf("missing") !== -1)
 		.count();
-	let invalid = df
+	let dirty = df
 		.getSeries("flag")
 		.where(value => Array.isArray(value))
-		.where(
-			value => value.indexOf("clean") !== -1 || value.indexOf("zero") !== -1
-		)
+		.where(value => value.indexOf("clean") !== -1)
+		.count();
+	let zerod = df
+		.getSeries("flag")
+		.where(value => Array.isArray(value))
+		.where(value => value.indexOf("zero") !== -1)
 		.count();
 	let breakdown = {
 		valid: valid / count,
 		missing: missing / count,
-		invalid: invalid / count
+		invalid: (dirty + zerod) / count
 	};
 	let report = {
-		accuracy: 0,
-		completeness: 0,
-		consistency: 0
+		accuracy: (1 - dirty / count) * 4,
+		completeness: 4 * breakdown.valid,
+		consistency: 4 * ((count - missing - zerod) / count)
 	};
 	return { breakdown, report, count };
 }

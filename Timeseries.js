@@ -10,7 +10,7 @@ const {
 	valueFiller
 } = require("./Timeseries.fill.js");
 const { msToInterval } = require("./Timeseries.interval");
-const processTimeseries = require('./Timeseries.process')
+const {processTimeseries} = require('./Timeseries.process')
 class Timeseries extends DataFrame {
 	constructor(ts) {
 		super(ts);
