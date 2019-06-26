@@ -2,7 +2,11 @@ const { DataFrame, Series } = require("data-forge");
 const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
-const { rosnerTest, modZScore, quality } = require("./Timeseries.statistics.js");
+const {
+	rosnerTest,
+	modZScore,
+	quality
+} = require("./Timeseries.statistics.js");
 const {
 	gapExists,
 	gapFill,
@@ -10,7 +14,8 @@ const {
 	valueFiller
 } = require("./Timeseries.fill.js");
 const { msToInterval } = require("./Timeseries.interval");
-const {processTimeseries} = require('./Timeseries.process')
+const { processTimeseries } = require("./Timeseries.process");
+const { group } = require("./Timeseries.arrange");
 class Timeseries extends DataFrame {
 	constructor(ts) {
 		super(ts);
@@ -523,3 +528,4 @@ class Timeseries extends DataFrame {
 module.exports = Timeseries;
 module.exports.processTimeseries = processTimeseries;
 module.exports.quality = quality;
+module.exports.group = group;

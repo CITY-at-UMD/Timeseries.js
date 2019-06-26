@@ -11,7 +11,7 @@ const {
 	quality
 } = require("./Timeseries.statistics");
 
-function processTimeseries(ts, { threshold = 96 } = {}) {
+function processTimeseries(ts, { zeroThreshold = 96 } = {}) {
 	let df = new dataForge.DataFrame(ts)
 		.generateSeries({
 			flag: row => []
@@ -36,7 +36,7 @@ function processTimeseries(ts, { threshold = 96 } = {}) {
 	df = new dataForge.DataFrame(data).withIndex(row =>
 		new Date(row.date).valueOf()
 	);
-	df = zeroReplacement(df, threshold);
+	df = zeroReplacement(df, zeroThreshold);
 	const mean = validMean(df);
 	const monthly = validMonthlyMeanMap(df);
 	// fill data
