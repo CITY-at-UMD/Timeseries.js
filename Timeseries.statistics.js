@@ -5,7 +5,7 @@
 const { DataFrame } = require("data-forge");
 const stats = require("simple-statistics");
 var { Studentt } = require("distributions");
-
+const dayjs = require("dayjs");
 function rval(df) {
 	let values = df.deflate(row => row.x).toArray();
 	let std = stats.sampleStandardDeviation(values);
@@ -111,5 +111,121 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 const modZScore = (value, mad, median) => {
 	return (0.6745 * (value - median)) / mad;
 };
+function calculateOutlierThresholds(df, { k, filterZeros = true } = {}) {
+	let values = df
+		.where(
+			row =>
+				row.flag === null || row.flag === undefined || Array.isArray(row.flag)
+		)
+		.where(row => !isNaN(row.value) && row.value !== null)
+		.getSeries("value")
+		.bake();
+	if (filterZeros) values = values.where(value => value > 0);
+	if (!k) {
+		k =
+			values.count() < 1000
+				? Math.floor(values.count() * 0.15)
+				: Math.min(...[1000, Math.floor(values.count() * 0.02)]);
+	}
+	if (values.count < 5) return {};
+	let { outliers, threshold } = rosnerTest(values.toArray(), k);
+	return { outliers, threshold };
+}
 
-module.exports = { rosnerTest, modZScore };
+function zeroCheck(df, threshold = 2) {
+	let zeroGroups = df
+		.variableWindow((a, b) => {
+			return a.value === b.value && a.value === 0;
+		})
+		.where(window => window.getIndex().count() >= threshold);
+	let zeroSummary = zeroGroups
+		.select(window => ({
+			start: window.first().date,
+			end: window.last().date,
+			count: window.count()
+		}))
+		.inflate(); // Series -> dataframe.
+	// .toArray()
+	return { zeroSummary, zeroGroups };
+}
+
+function zeroReplacement(df, threshold) {
+	let { zeroGroups } = zeroCheck(df, threshold);
+	zeroGroups.forEach(dff => {
+		dff = dff.transformSeries({
+			value: value => null,
+			flag: value => ["zero"]
+		});
+		df = DataFrame.merge([df, dff]);
+	});
+	return df;
+}
+function isOutlier(value, { lower, upper }) {
+	if (value < lower || value >= upper) {
+		return true;
+	}
+	return false;
+}
+function validMean(df) {
+	let values = df.getSeries("value").where(value => typeof value === "number");
+	return values.average();
+}
+function validMonthlyMeanMap(df) {
+	let dateComparison = row =>
+		dayjs(row.date)
+			.startOf("month")
+			.month();
+
+	df = df
+		.where(row => typeof row.value === "number")
+		.groupBy(dateComparison)
+		.select(group => ({
+			month: new Date(group.first().date).getMonth(),
+			value: group.deflate(row => row.value).average()
+		}));
+	return new Map(df.toArray().map(({ month, value }) => [month, value]));
+}
+
+function quality(df) {
+	let count = df.getIndex().count();
+	let valid = df
+		.getSeries("flag")
+		.where(
+			value => value === null || (Array.isArray(value) && value.length === 0)
+		)
+		.count();
+	let missing = df
+		.getSeries("flag")
+		.where(value => Array.isArray(value))
+		.where(value => value.indexOf("missing") !== -1)
+		.count();
+	let invalid = df
+		.getSeries("flag")
+		.where(value => Array.isArray(value))
+		.where(
+			value => value.indexOf("clean") !== -1 || value.indexOf("zero") !== -1
+		)
+		.count();
+	let breakdown = {
+		valid: valid / count,
+		missing: missing / count,
+		invalid: invalid / count
+	};
+	let report = {
+		accuracy: 0,
+		completeness: 0,
+		consistency: 0
+	};
+	return { breakdown, report, count };
+}
+
+module.exports = {
+	rosnerTest,
+	modZScore,
+	calculateOutlierThresholds,
+	zeroReplacement,
+	isOutlier,
+	validMean,
+	validMonthlyMeanMap,
+	quality
+};

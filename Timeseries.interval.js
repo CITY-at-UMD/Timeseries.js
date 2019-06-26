@@ -15,4 +15,22 @@ const msToInterval = ms => {
     return ["minute", end.diff(start, "minute")];
   }
 };
-module.exports = { msToInterval };
+
+function calculateInterval(df, startDate, endDate) {
+		if (!startDate) startDate = df.first.date;
+		if (!endDate) endDate = df.last.date;
+		function computeInterval(window) {
+			return window.last() - window.first();
+		}
+		const intervals = df
+			.between(startDate, endDate)
+			.getIndex()
+			.window(2)
+			.select(computeInterval)
+			.detectValues()
+			.orderBy(row => row.Frequency);
+
+		let val = intervals.last().Value;
+    return msToInterval(val);
+	}
+module.exports = { msToInterval, calculateInterval };

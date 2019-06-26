@@ -22,7 +22,10 @@ const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
 	if (gapSize > 0) return true;
 	return false;
 };
-const gapFillBlank = ([duration, durationValue]) => (pairA, pairB) => {
+const gapFillBlank = ([duration, durationValue], flag = "missing") => (
+	pairA,
+	pairB
+) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
 	let gapSize = Math.floor(
@@ -35,7 +38,7 @@ const gapFillBlank = ([duration, durationValue]) => (pairA, pairB) => {
 		let date = dayjs(startDate)
 			.add((entryIndex + 1) * durationValue, duration)
 			.toDate();
-		newEntries.push([date.valueOf(), { date }]);
+		newEntries.push([date.valueOf(), { date, flag: [flag] }]);
 	}
 	return newEntries;
 };
@@ -43,7 +46,7 @@ const gapFillBlank = ([duration, durationValue]) => (pairA, pairB) => {
 const valueFiller = (
 	fillType,
 	{ startValue, endValue, entryIndex, numEntries },
-	{ overrideValue, dateFunction, date }
+	{ overrideValue, dateFunction, date, flag: overRideFlag }
 ) => {
 	if (
 		["pad", "interpolate", "average"].indexOf(fillType) !== -1 &&
@@ -77,13 +80,14 @@ const valueFiller = (
 		value = null;
 		flag = ["fill"];
 	}
+	if (overRideFlag) flag = overRideFlag;
 	return { value, flag };
 };
 
 const gapFill = (
 	fillType,
 	[duration, durationValue],
-	{ overrideValue, dateFunction } = {}
+	{ overrideValue, dateFunction, flag } = {}
 ) => (pairA, pairB) => {
 	// Fill values forward.
 	const startDate = pairA[0];
@@ -101,7 +105,8 @@ const gapFill = (
 				{ startValue, endValue, entryIndex, numEntries },
 				{
 					overrideValue,
-					dateFunction
+					dateFunction,
+					flag
 				}
 			),
 			date = dayjs(startDate)

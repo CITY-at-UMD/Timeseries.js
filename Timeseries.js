@@ -2,7 +2,7 @@ const { DataFrame, Series } = require("data-forge");
 const dayjs = require("dayjs");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
-const { rosnerTest, modZScore } = require("./Timeseries.statistics.js");
+const { rosnerTest, modZScore, quality } = require("./Timeseries.statistics.js");
 const {
 	gapExists,
 	gapFill,
@@ -10,7 +10,7 @@ const {
 	valueFiller
 } = require("./Timeseries.fill.js");
 const { msToInterval } = require("./Timeseries.interval");
-
+const processTimeseries = require('./Timeseries.process')
 class Timeseries extends DataFrame {
 	constructor(ts) {
 		super(ts);
@@ -42,10 +42,12 @@ class Timeseries extends DataFrame {
 		let columnNames = [
 			...new Set([...Object.keys(ts[0]), "date", "value", "flag"])
 		];
+
 		this.df = new DataFrame({
 			columnNames,
 			values: ts
 		})
+
 			.withIndex(row => dayjs(row.date).valueOf())
 			// .withIndex(row => row.date)
 			// .distinct(row => row.date)
@@ -100,8 +102,15 @@ class Timeseries extends DataFrame {
 		let val = intervals.last().Value;
 		this._interval = msToInterval(val);
 	}
-	detectOutliers(column = "value", k) {
-		let values = this.df.deflate(row => row[column]);
+	calculateOutlierThresholds({ k, filterZeros = true } = {}) {
+		let values = this.df
+			.where(
+				row =>
+					row.flag === null || row.flag === undefined || Array.isArray(row.flag)
+			)
+			.where(row => !isNaN(row.value) && row.value !== null)
+			.getSeries("value");
+		if (filterZeros) values = values.where(value => value > 0);
 		if (!k) {
 			k =
 				values.count() < 1000
@@ -110,11 +119,12 @@ class Timeseries extends DataFrame {
 		}
 		if (values.count < 5) return {};
 		let { outliers, threshold } = rosnerTest(values.toArray(), k);
-		this.setOutlierThreshold(threshold);
+
+		this.thresholds = threshold;
 		return { outliers, threshold };
 	}
-	setOutlierThreshold({ lower, upper } = {}) {
-		this.thresholds = { lower, upper };
+	toString() {
+		return this.df.toString();
 	}
 	toArray(columnName) {
 		if (columnName) {
@@ -127,7 +137,40 @@ class Timeseries extends DataFrame {
 		const sum = this.df.deflate(row => row[columnName]).sum();
 		return sum;
 	}
-	calculateStatistics(columnName = "value") {
+	get goodValues() {
+		let values = this.df
+			.where(row => row.flag === null || row.flag === undefined)
+			.where(row => row.value !== null && !isNaN(row.value));
+		return values;
+	}
+	get validMean() {
+		let values = this.df
+			.getSeries("value")
+			.where(value => typeof value === "number");
+		return values.average();
+	}
+	get validMonthlyMeanMap() {
+		let dateComparison = row =>
+			dayjs(row.date)
+				.startOf("month")
+				.month();
+		// Failed filter out values with flags
+		// .where(
+		// 		row =>
+		// 			row.flag === null ||
+		// 			row.flag === undefined ||
+		// 			(Array.isArray(row.flag) && row.flag.length === 0)
+		// 	)
+		let df = this.df
+			.where(row => typeof row.value === "number")
+			.groupBy(dateComparison)
+			.select(group => ({
+				month: new Date(group.first().date).getMonth(),
+				value: group.deflate(row => row.value).average()
+			}));
+		return new Map(df.toArray().map(({ month, value }) => [month, value]));
+	}
+	calculateStatistics(columnName = "value", filterZeros = false) {
 		const series = this.df
 			.deflate(row => row[columnName])
 			.where(value => !isNaN(value));
@@ -161,12 +204,6 @@ class Timeseries extends DataFrame {
 		return summary;
 	}
 
-	fillMissing({ start, end } = {}) {
-		if (!start) start = this.first.date;
-		if (!end) end = this.last.date;
-		let full = Timeseries.blank(start, end, this.interval);
-		console.log(full);
-	}
 	zeroCheck(threshold = 2) {
 		let zeroGroups = this.df
 			.variableWindow((a, b) => {
@@ -180,40 +217,69 @@ class Timeseries extends DataFrame {
 				count: window.count()
 			}))
 			.inflate(); // Series -> dataframe.
-		// .toArray();
-		console.log(zeroSummary.toString());
-		// console.log(zeroGroups.toString());
+		// .toArray()
+		return { zeroSummary, zeroGroups };
 	}
 
-	
-
-	fillData(fillType, { value, dateFunction } = {}) {
-		let nullCheck = val => isNaN(val) && !val;
-		let data = this.df.toArray().map(row => ({
-			...row,
-			...((row.value === null || row.value === undefined) &&
-				valueFiller(
+	zeroReplacement(threshold) {
+		let { zeroGroups } = this.zeroCheck(threshold);
+		zeroGroups.forEach(df => {
+			df = df.transformSeries({
+				value: value => null,
+				flag: value => ["zero", ...(value || [])]
+			});
+			this.df = Timeseries.merge(this.df, df).df;
+		});
+		return this;
+	}
+	fillMissingTimeseries({ start, end, interval } = {}) {
+		if (!start) start = this.first.date;
+		if (!end) end = this.last.date;
+		if (!interval) interval = this.interval;
+		let blank = Timeseries.upsample(
+			[{ date: start, value: null }, { date: end, value: null }],
+			"value",
+			interval
+		);
+		this.df = Timeseries.merge(blank, this.df).df;
+		console.log(
+			"missin",
+			this.df
+				.getSeries("value")
+				.where(value => value === null)
+				.count(),
+			this.count
+		);
+		return this;
+	}
+	fillNullData(fillType, { overrideValue, dateFunction } = {}) {
+		let data = this.df.toArray().map(row => {
+			if (row.value === null || row.value === undefined) {
+				let { value, flag } = valueFiller(
 					fillType,
 					{},
-					{ overrideValue: value, date: row.date, dateFunction }
-				))
-		}));
-		this.df = new Timeseries(data);
-		return;
+					{ overrideValue, date: row.date, dateFunction }
+				);
+				return { ...row, value, flag: [...flag, ...(row.flag || [])] };
+			} else {
+				return row;
+			}
+		});
+		this.df = new Timeseries(data).df;
+		return this;
 	}
 	/**
-	 * Clean Timerseies
+	 * Remove Outliers
 	 * @param  {Number} options.lower lower threshold
 	 * @param  {Number} options.upper upper threshold
 	 * @return {}               cleaned data dataframe
 	 */
-	clean({ lower, upper } = {}, fillValue = null) {
-		// if (!lower || lower === false || !upper || upper === false) {
-		// 	if (!this.thresholds) this.detectOutliers("value");
-		// 	lower = this.thresholds.lower;
-		// 	upper = this.thresholds.upper;
-		// }
-
+	removeOutliers({ lower, upper } = {}, fillValue = null) {
+		if (!lower || !upper) {
+			if (!this.thresholds) this.calculateOutlierThresholds();
+			lower = this.thresholds.lower;
+			upper = this.thresholds.upper;
+		}
 		const filterValue = (value, lower, upper) => {
 			if (value < lower || value >= upper) {
 				return true;
@@ -229,18 +295,45 @@ class Timeseries extends DataFrame {
 			value: row =>
 				filterValue(row.value, lower, upper) ? fillValue : row.value
 		});
-		return;
+		return this;
+	}
+
+	clean(params) {
+		this.removeOutliers(params);
+		return this;
+	}
+
+	reset() {
+		this.df = this.df
+			.withSeries({
+				value: df =>
+					df
+						.deflate(row => (row.flags ? row.raw : row.value))
+						.select(value => value)
+			})
+			.where(row => row.value !== null && !isNaN(row.value))
+			.dropSeries("flags")
+			.dropSeries("raw");
+		return this;
+		s;
+	}
+	between(start, end) {
+		// inclusive
+		this.df = this.df.between(start, end);
+		return this;
 	}
 	quality() {
 		let count = this.length;
 		let valid = this.df
 			.getSeries("flag")
-			.where(value => value === null)
+			.where(
+				value => value === null || (Array.isArray(value) && value.length === 0)
+			)
 			.count();
 		let missing = this.df
 			.getSeries("flag")
 			.where(value => Array.isArray(value))
-			.where(value => value.indexOf("fill") !== -1)
+			.where(value => value.indexOf("missing") !== -1)
 			.count();
 		let invalid = this.df
 			.getSeries("flag")
@@ -257,20 +350,7 @@ class Timeseries extends DataFrame {
 			completeness: 0,
 			consistency: 0
 		};
-		return { breakdown, report };
-	}
-
-	reset() {
-		this.df = this.df
-			.withSeries({
-				value: df =>
-					df
-						.deflate(row => (row.flags ? row.raw : row.value))
-						.select(value => value)
-			})
-			.where(row => row.value !== null && !isNaN(row.value))
-			.dropSeries("flags")
-			.dropSeries("raw");
+		return { breakdown, report, count };
 	}
 	dataStatistics() {
 		let changes = this.df
@@ -292,6 +372,27 @@ class Timeseries extends DataFrame {
 			{}
 		);
 		return analysis;
+	}
+	populate(value) {
+		let v = value / this.df.getIndex().count();
+		let df = this.df.generateSeries({ value: row => v });
+		this.df = df;
+		return this;
+	}
+	group(interval = "day", toArray = true) {
+		if (["hour", "day", "month", "year"].indexOf(interval) < 0)
+			throw new Error("interval type not supported");
+		let dateComparison = row => dayjs(row.date).startOf(interval);
+		let series = this.df.groupBy(dateComparison);
+		if (toArray) {
+			let groups = [];
+			for (const g of series) {
+				groups.push([dateComparison(g.first()).toDate(), g.toArray()]);
+			}
+			return groups;
+		} else {
+			return series;
+		}
 	}
 	// NOTE: Potentially this should collapse the values to a single one before the downsampling
 	// or have an option to do this as the data fidelity is then lost when downsampling
@@ -363,16 +464,12 @@ class Timeseries extends DataFrame {
 		return new Timeseries(df);
 	}
 
-	between(start, end) {
-		// inclusive
-		this.df = this.df.between(start, end);
-		return;
-	}
 	static merge(...dataframes) {
 		//merged in ascending order (eg last df with column is the value used)
-		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
+		// dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
 		let merged = DataFrame.merge(dataframes);
-		return new Timeseries(merged);
+		let ts = new Timeseries(merged);
+		return ts;
 	}
 	static aggregate(...dataframes) {
 		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
@@ -422,26 +519,7 @@ class Timeseries extends DataFrame {
 			.toArray();
 		return new Timeseries(blankDF);
 	}
-	populate(value) {
-		let v = value / this.df.getIndex().count();
-		let df = this.df.generateSeries({ value: row => v });
-		this.df = df;
-		return;
-	}
-	group(interval = "day", toArray = true) {
-		if (["hour", "day", "month", "year"].indexOf(interval) < 0)
-			throw new Error("interval type not supported");
-		let dateComparison = row => dayjs(row.date).startOf(interval);
-		let series = this.df.groupBy(dateComparison);
-		if (toArray) {
-			let groups = [];
-			for (const g of series) {
-				groups.push([dateComparison(g.first()).toDate(), g.toArray()]);
-			}
-			return groups;
-		} else {
-			return series;
-		}
-	}
 }
 module.exports = Timeseries;
+module.exports.processTimeseries = processTimeseries;
+module.exports.quality = quality;
