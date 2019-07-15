@@ -98,19 +98,49 @@ function rosnerTest(dataset = [], k = 10, alpha = 0.05) {
 	let outlierValues = outliers
 		.where(row => row.Value > 0)
 		.deflate(row => row.Value);
-	let threshold = {
+	let thresholds = {
 		lower: 0,
 		upper: outlierValues.count() > 0 ? outlierValues.min() : Infinity
 	};
 	return {
 		outliers,
-		threshold,
+		thresholds,
 		iterations: i
 	};
 }
-const modZScore = (value, mad, median) => {
+const modz = (value, mad, median) => {
 	return (0.6745 * (value - median)) / mad;
 };
+function modifiedZScoreTest(values) {
+	let median = stats.median(values);
+	let mad = stats.medianAbsoluteDeviation(values);
+	// values = values.sort((a, b) => b - a).filter(v => v > 0);
+	// .map(v => [v, modz(v, mad, median)]);
+
+	let score,
+		value,
+		threshold = Infinity,
+		index = 0;
+	do {
+		value = values[index];
+		score = modz(value, mad, median);
+		if (Math.abs(score) >= 3.5) threshold = value;
+	} while (Math.abs(score) >= 3.5);
+	return { thresholds: { upper: threshold, lower: 0 } };
+}
+function boxPlotTest(values) {
+	let q1 = stats.quantile(values, 0.25);
+	let q3 = stats.quantile(values, 0.75);
+	let iqr = q3 - q1;
+	return {
+		thresholds: {
+			lowerInner: q1 - 1.5 * iqr,
+			upperInner: q1 - 3 * iqr,
+			lowerOuter: q3 + 1.5 * iqr,
+			upperOuter: q3 + 3 * iqr
+		}
+	};
+}
 function calculateOutlierThresholds(df, { k, filterZeros = true } = {}) {
 	let values = df
 		.where(
@@ -224,7 +254,8 @@ function quality(df) {
 
 module.exports = {
 	rosnerTest,
-	modZScore,
+	modifiedZScoreTest,
+	boxPlotTest,
 	calculateOutlierThresholds,
 	zeroReplacement,
 	isOutlier,

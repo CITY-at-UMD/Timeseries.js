@@ -1,0 +1,59 @@
+[
+{
+    "_id" : ObjectId("5d0ab12d44aaa68bcc90bf29"),
+    "thresholds" : {
+        "lower" : 0,
+        "upper" : 1536,
+        "timestamp" : ISODate("2019-06-26T09:42:35.362Z"),
+        "options" : {
+            "modz" : "0.6745*(x-0)/0",
+            "upperOuterFence" : 2048,
+            "lowerOuterFence" : 1280
+        }
+    }
+}
+
+,
+{
+    "_id" : ObjectId("5d0ab12d44aaa68bcc90bf3f"),
+    "thresholds" : {
+        "lower" : 0,
+        "upper" : 300,
+        "timestamp" : ISODate("2019-06-26T09:48:06.891Z"),
+        "options" : {
+            "modz" : "0.6745*(x-0)/0",
+            "upperOuterFence" : 0,
+            "lowerOuterFence" : 0
+        }
+    }
+}
+
+,
+{
+    "_id" : ObjectId("5d0ab13044aaa68bcc90c4e8"),
+    "thresholds" : {
+        "lower" : 0,
+        "upper" : 608256,
+        "timestamp" : ISODate("2019-06-26T09:46:13.375Z"),
+        "options" : {
+            "modz" : "0.6745*(x-120)/120",
+            "upperOuterFence" : 1080,
+            "lowerOuterFence" : 720
+        }
+    }
+}
+
+,
+{
+    "_id" : ObjectId("5d0ab13044aaa68bcc90c5b2"),
+    "thresholds" : {
+        "lower" : 0,
+        "upper" : Infinity,
+        "timestamp" : ISODate("2019-06-26T09:53:52.376Z"),
+        "options" : {
+            "modz" : "0.6745*(x-100)/100",
+            "upperOuterFence" : 3600,
+            "lowerOuterFence" : 2250
+        }
+    }
+}]

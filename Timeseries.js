@@ -4,7 +4,8 @@ const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 const isEqual = require("lodash/isEqual");
 const {
 	rosnerTest,
-	modZScore,
+	modifiedZScoreTest,
+	boxPlotTest,
 	quality
 } = require("./Timeseries.statistics.js");
 const {
@@ -115,6 +116,7 @@ class Timeseries extends DataFrame {
 			)
 			.where(row => !isNaN(row.value) && row.value !== null)
 			.getSeries("value");
+		// if (filterZeros) values = values.where(value => value !== 0);
 		if (filterZeros) values = values.where(value => value > 0);
 		if (!k) {
 			k =
@@ -123,10 +125,11 @@ class Timeseries extends DataFrame {
 					: Math.min(...[1000, Math.floor(values.count() * 0.02)]);
 		}
 		if (values.count < 5) return {};
-		let { outliers, threshold } = rosnerTest(values.toArray(), k);
-
-		this.thresholds = threshold;
-		return { outliers, threshold };
+		let { thresholds: esd } = rosnerTest(values.toArray(), k);
+		let { thresholds: box } = boxPlotTest(values.toArray());
+		let { thresholds: modz } = modifiedZScoreTest(values.toArray());
+		// this.thresholds = threshold;
+		return { esd, box, modz };
 	}
 	toString() {
 		return this.df.toString();
@@ -471,7 +474,7 @@ class Timeseries extends DataFrame {
 
 	static merge(...dataframes) {
 		//merged in ascending order (eg last df with column is the value used)
-		// dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
+		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
 		let merged = DataFrame.merge(dataframes);
 		let ts = new Timeseries(merged);
 		return ts;

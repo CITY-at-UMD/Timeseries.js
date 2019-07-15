@@ -12,4 +12,4 @@ let ts = new Timeseries(
 );
 
 // console.log(ts.df.toString());
-// console.log(ts.toArray());
+console.log(ts.toArray());
