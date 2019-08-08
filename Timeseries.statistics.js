@@ -1,7 +1,7 @@
 // Source: https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h3.htm
 // https://vsp.pnnl.gov/help/Vsample/Rosners_Outlier_Test.htm
 // https://www.itl.nist.gov/div898/handbook/prc/section1/prc16.htm
-
+// https://www.math.ucla.edu/~tom/distributions/KolSmir2.html?
 const { DataFrame } = require("data-forge");
 const stats = require("simple-statistics");
 var { Studentt } = require("distributions");
@@ -114,19 +114,22 @@ const modz = (value, mad, median) => {
 function modifiedZScoreTest(values) {
 	let median = stats.median(values);
 	let mad = stats.medianAbsoluteDeviation(values);
-	// values = values.sort((a, b) => b - a).filter(v => v > 0);
-	// .map(v => [v, modz(v, mad, median)]);
-
-	let score,
-		value,
-		threshold = Infinity,
-		index = 0;
-	do {
-		value = values[index];
-		score = modz(value, mad, median);
-		if (Math.abs(score) >= 3.5) threshold = value;
-	} while (Math.abs(score) >= 3.5);
-	return { thresholds: { upper: threshold, lower: 0 } };
+	values = values
+		.sort((a, b) => b - a)
+		.filter(v => v > 0)
+		.map(v => [v, modz(v, mad, median)]);
+	let outliers = values.filter(([v, modz]) => Math.abs(modz) >= 3.5);
+	let upper = Math.min(...[Infinity, ...outliers.map(v => v[0])]);
+	// let score,
+	// 	value,
+	// 	threshold = Infinity,
+	// 	index = 0;
+	// do {
+	// 	value = values[index];
+	// 	score = modz(value, mad, median);
+	// 	if (Math.abs(score) >= 3.5) threshold = value;
+	// } while (score >= 3.5);
+	return { thresholds: { upper, lower: 0 } };
 }
 function boxPlotTest(values) {
 	let q1 = stats.quantile(values, 0.25);

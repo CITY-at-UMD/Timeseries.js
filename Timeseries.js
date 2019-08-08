@@ -17,6 +17,7 @@ const {
 const { msToInterval } = require("./Timeseries.interval");
 const { processTimeseries } = require("./Timeseries.process");
 const { group } = require("./Timeseries.arrange");
+
 class Timeseries extends DataFrame {
 	constructor(ts) {
 		super(ts);
@@ -124,7 +125,7 @@ class Timeseries extends DataFrame {
 					? Math.floor(values.count() * 0.15)
 					: Math.min(...[1000, Math.floor(values.count() * 0.02)]);
 		}
-		if (values.count < 5) return {};
+		if (values.count() < 5) return {};
 		let { thresholds: esd } = rosnerTest(values.toArray(), k);
 		let { thresholds: box } = boxPlotTest(values.toArray());
 		let { thresholds: modz } = modifiedZScoreTest(values.toArray());
@@ -179,9 +180,10 @@ class Timeseries extends DataFrame {
 		return new Map(df.toArray().map(({ month, value }) => [month, value]));
 	}
 	calculateStatistics(columnName = "value", filterZeros = false) {
-		const series = this.df
+		let series = this.df
 			.deflate(row => row[columnName])
 			.where(value => !isNaN(value));
+		if (filterZeros) series = series.where(value => value > 0);
 		let median = series.median();
 		let mean = series.average();
 		let count = series.count();
@@ -231,15 +233,25 @@ class Timeseries extends DataFrame {
 
 	zeroReplacement(threshold) {
 		let { zeroGroups } = this.zeroCheck(threshold);
-		zeroGroups.forEach(df => {
-			df = df.transformSeries({
-				value: value => null,
-				flag: value => ["zero", ...(value || [])]
-			});
-			this.df = Timeseries.merge(this.df, df).df;
+		let odf = new DataFrame(this.df).withIndex(row =>
+			new Date(row.date).valueOf()
+		);
+		let dfs = zeroGroups.toArray().map(df => {
+			df = df
+				.transformSeries({
+					value: value => null,
+					raw: 0,
+					flag: value => ["zero", ...(value || [])]
+				})
+				.withIndex(row => new Date(row.date).valueOf());
+			return df;
 		});
+
+		odf = DataFrame.merge([odf, ...dfs]);
+		this.df = odf;
 		return this;
 	}
+
 	fillMissingTimeseries({ start, end, interval } = {}) {
 		if (!start) start = this.first.date;
 		if (!end) end = this.last.date;
@@ -249,7 +261,7 @@ class Timeseries extends DataFrame {
 			"value",
 			interval
 		);
-		this.df = Timeseries.merge(blank, this.df).df;
+		this.df = DataFrame.merge([blank.df, this.df]);
 		console.log(
 			"missin",
 			this.df
@@ -471,10 +483,9 @@ class Timeseries extends DataFrame {
 			.bake();
 		return new Timeseries(df);
 	}
-
 	static merge(...dataframes) {
 		//merged in ascending order (eg last df with column is the value used)
-		dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
+		// dataframes = dataframes.map(df => new Timeseries(df)).map(df => df.df);
 		let merged = DataFrame.merge(dataframes);
 		let ts = new Timeseries(merged);
 		return ts;

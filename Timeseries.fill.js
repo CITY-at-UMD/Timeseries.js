@@ -22,7 +22,8 @@ const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
 	if (gapSize > 0) return true;
 	return false;
 };
-const gapFillBlank = ([duration, durationValue], flag = "missing") => (
+
+const gapFillNull = ([duration, durationValue], flag = "missing") => (
 	pairA,
 	pairB
 ) => {
@@ -38,10 +39,11 @@ const gapFillBlank = ([duration, durationValue], flag = "missing") => (
 		let date = dayjs(startDate)
 			.add((entryIndex + 1) * durationValue, duration)
 			.toDate();
-		newEntries.push([date.valueOf(), { date, flag: [flag] }]);
+		newEntries.push([date.valueOf(), { date, value: null, flag: [flag] }]);
 	}
 	return newEntries;
 };
+const gapFillBlank = gapFillNull;
 
 const valueFiller = (
 	fillType,
@@ -119,4 +121,4 @@ const gapFill = (
 	return newEntries;
 };
 
-module.exports = { gapExists, gapFill, gapFillBlank, valueFiller };
+module.exports = { gapExists, gapFill, gapFillBlank, gapFillNull, valueFiller };
