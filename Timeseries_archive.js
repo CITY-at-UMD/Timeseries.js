@@ -540,6 +540,3 @@ class Timeseries extends DataFrame {
 	}
 }
 module.exports = Timeseries;
-module.exports.processTimeseries = processTimeseries;
-module.exports.quality = quality;
-module.exports.group = group;
