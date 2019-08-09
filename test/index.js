@@ -2,6 +2,7 @@ const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
 const { msToInterval } = require("../Timeseries.interval");
 const _ = require("lodash");
+const { gapExists, gapFill } = require("../Timeseries.fill");
 class Timeseries extends DataFrame {
 	constructor(data) {
 		let config = {
@@ -60,6 +61,14 @@ class Timeseries extends DataFrame {
 			.add(value, duration)
 			.diff(d0);
 		console.log(currentSampleDiff, newSampleDiff);
+	}
+	upsample([duration, value], fillType = "avg") {
+        // Dont use this b/c it has the raw and flag values
+		let df = this.fillGaps(
+			gapExists([duration, value]),
+			gapFill(fillType, [duration, value])
+		);
+		return df;
 	}
 	downsample([duration, value], fillType = "sum") {
 		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
@@ -124,5 +133,6 @@ console.log(df.at(new Date(2012, 0)));
 console.log(df.getInterval());
 // df.resample(["day", 1], "pad");
 let years = df.downsample(["year", 1], "sum");
-
 console.log(years.toString());
+let hours = df.upsample(["hour", 1], "avg");
+console.log(hours.toString());
