@@ -23,10 +23,7 @@ const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
 	return false;
 };
 
-const gapFillNull = ([duration, durationValue], flag = "missing") => (
-	pairA,
-	pairB
-) => {
+const gapFillNull = ([duration, durationValue], flag) => (pairA, pairB) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
 	let gapSize = Math.floor(
@@ -39,7 +36,10 @@ const gapFillNull = ([duration, durationValue], flag = "missing") => (
 		let date = dayjs(startDate)
 			.add((entryIndex + 1) * durationValue, duration)
 			.toDate();
-		newEntries.push([date.valueOf(), { date, value: null, flag: [flag] }]);
+		newEntries.push([
+			date.valueOf(),
+			{ date, value: null, ...(flag && { flag: [flag] }) }
+		]);
 	}
 	return newEntries;
 };

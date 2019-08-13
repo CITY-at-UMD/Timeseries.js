@@ -5,7 +5,10 @@ const _ = require("lodash");
 const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 class Timeseries extends DataFrame {
-	constructor(data) {
+	constructor(data = []) {
+		if (data instanceof DataFrame || data instanceof Timeseries)
+			data = data.toArray();
+
 		let config = {
 			values: data,
 			index: data.map(({ date }) => new Date(date).valueOf()),
@@ -154,6 +157,11 @@ class Timeseries extends DataFrame {
 		};
 		return stats;
 	}
+	populateAverage(value) {
+		let v = value / this.getIndex().count();
+		let df = this.generateSeries({ value: row => v });
+		return df;
+	}
 	static blank(startDate, endDate, [duration, value = 1]) {
 		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
 			console.error(interval);
@@ -162,18 +170,10 @@ class Timeseries extends DataFrame {
 		let df = new Timeseries([
 			{ date: new Date(startDate) },
 			{ date: new Date(endDate) }
-		]);
-		let blankDF = df
+		])
 			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
-			.startAt(startDate)
-			.before(endDate)
-			.toArray();
-		return new Timeseries(blankDF);
-	}
-	populateAverage(value) {
-		let v = value / this.getIndex().count();
-		let df = this.generateSeries({ value: row => v });
-		return df;
+			.between(startDate, endDate);
+		return new Timeseries(df);
 	}
 }
 module.exports = Timeseries;
