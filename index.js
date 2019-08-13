@@ -175,5 +175,20 @@ class Timeseries extends DataFrame {
 			.between(startDate, endDate);
 		return new Timeseries(df);
 	}
+	static aggregate(dataframes) {
+		const concatenated = DataFrame.concat(dataframes)
+			.groupBy(row => row.date)
+			.select(group => {
+				const date = group.first().date;
+				let o = { date };
+				group
+					.getColumnNames()
+					.filter(c => c !== "date")
+					.forEach(c => (o[c] = group.deflate(row => row[c]).sum()));
+				return o;
+			})
+			.inflate();
+		return new Timeseries(concatenated);
+	}
 }
 module.exports = Timeseries;
