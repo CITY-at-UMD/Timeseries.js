@@ -2,7 +2,7 @@ const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
 const { msToInterval } = require("./Timeseries.interval");
 const _ = require("lodash");
-const { gapExists, gapFill } = require("./Timeseries.fill");
+const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 class Timeseries extends DataFrame {
 	constructor(data) {
@@ -153,6 +153,27 @@ class Timeseries extends DataFrame {
 			iqr
 		};
 		return stats;
+	}
+	static blank(startDate, endDate, [duration, value = 1]) {
+		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
+			console.error(interval);
+			throw new Error("interval type not supported");
+		}
+		let df = new Timeseries([
+			{ date: new Date(startDate) },
+			{ date: new Date(endDate) }
+		]);
+		let blankDF = df
+			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
+			.startAt(startDate)
+			.before(endDate)
+			.toArray();
+		return new Timeseries(blankDF);
+	}
+	populateAverage(value) {
+		let v = value / this.getIndex().count();
+		let df = this.generateSeries({ value: row => v });
+		return df;
 	}
 }
 module.exports = Timeseries;
