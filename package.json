@@ -1,7 +1,7 @@
 {
   "name": "Timeseries",
-  "version": "1.3.4",
-  "main": "Timeseries.js",
+  "version": "2.0.0",
+  "main": "index.js",
   "license": "MIT",
   "dependencies": {
     "data-forge": "^1.7.2",

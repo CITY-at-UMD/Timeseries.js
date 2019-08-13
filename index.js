@@ -1,8 +1,9 @@
 const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
-const { msToInterval } = require("../Timeseries.interval");
+const { msToInterval } = require("./Timeseries.interval");
 const _ = require("lodash");
-const { gapExists, gapFill } = require("../Timeseries.fill");
+const { gapExists, gapFill } = require("./Timeseries.fill");
+const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 class Timeseries extends DataFrame {
 	constructor(data) {
 		let config = {
@@ -12,9 +13,9 @@ class Timeseries extends DataFrame {
 		};
 		super(config);
 	}
-	getInterval(startDate, endDate) {
-		if (!startDate) startDate = this.first().date;
-		if (!endDate) endDate = this.last().date;
+	get interval() {
+		let startDate = this.first().date;
+		let endDate = this.last().date;
 		function computeInterval(window) {
 			return window.last() - window.first();
 		}
@@ -43,7 +44,7 @@ class Timeseries extends DataFrame {
 		if (["hour", "day", "month", "year"].indexOf(inverval) === -1)
 			throw new Error("interval type not supported");
 		let dateComparison = row => dayjs(row.date).startOf(interval);
-		let groups = this.df.groupBy(dateComparison);
+		let groups = this.groupBy(dateComparison);
 		return groups;
 	}
 	resample([duration, value = 1], fillType) {
@@ -63,7 +64,7 @@ class Timeseries extends DataFrame {
 		console.log(currentSampleDiff, newSampleDiff);
 	}
 	upsample([duration, value], fillType = "avg") {
-        // Dont use this b/c it has the raw and flag values
+		// Dont use this b/c it has the raw and flag values
 		let df = this.fillGaps(
 			gapExists([duration, value]),
 			gapFill(fillType, [duration, value])
@@ -119,20 +120,39 @@ class Timeseries extends DataFrame {
 			.withIndex(row => row.date.valueOf());
 		return df;
 	}
+	calculateStatistics({
+		column = "value",
+		filterZeros = false,
+		filterNegative = true
+	} = {}) {
+		let series = this.deflate(row => row[columnName]).where(
+			value => !isNaN(value)
+		);
+		if (filterNegative) series = series.where(value => value >= 0);
+		if (filterZeros) series = series.where(value => value !== 0);
+		let median = series.median();
+		let mean = series.average();
+		let count = series.count();
+		let std = series.std();
+		let min = series.min();
+		let max = series.max();
+		let mad = medianAbsoluteDeviation(series.toArray());
+		let q1 = quantile(series.toArray(), 0.25);
+		let q3 = quantile(series.toArray(), 0.75);
+		let iqr = q3 - q1;
+		let stats = {
+			median,
+			mean,
+			count,
+			std,
+			min,
+			max,
+			mad,
+			q1,
+			q3,
+			iqr
+		};
+		return stats;
+	}
 }
-
-// Test
-let values = new Array(36)
-	.fill(0)
-	.map((v, i) => ({ date: new Date(2010, 0 + i), value: i }));
-values.push({ date: new Date(), raw: 122, value: 12, flag: ["outlier"] });
-let df = new Timeseries(values);
-console.log(df.toString());
-console.log(df.between(new Date(2015, 0), new Date()).toString());
-console.log(df.at(new Date(2012, 0)));
-console.log(df.getInterval());
-// df.resample(["day", 1], "pad");
-let years = df.downsample(["year", 1], "sum");
-console.log(years.toString());
-let hours = df.upsample(["hour", 1], "avg");
-console.log(hours.toString());
+module.exports = Timeseries;
