@@ -6,8 +6,9 @@ const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill");
 const { medianAbsoluteDeviation, quantile } = require("simple-statistics");
 class Timeseries extends DataFrame {
 	constructor(data = []) {
-		if (data instanceof DataFrame || data instanceof Timeseries)
+		if (data instanceof DataFrame || data instanceof Timeseries) {
 			data = data.toArray();
+		}
 
 		let config = {
 			values: data,
@@ -43,8 +44,8 @@ class Timeseries extends DataFrame {
 	at(date) {
 		return super.at(new Date(date).valueOf());
 	}
-	group(inverval, toArray) {
-		if (["hour", "day", "month", "year"].indexOf(inverval) === -1)
+	group(interval, toArray) {
+		if (["hour", "day", "month", "year"].indexOf(interval) === -1)
 			throw new Error("interval type not supported");
 		let dateComparison = row => dayjs(row.date).startOf(interval);
 		let groups = this.groupBy(dateComparison);
@@ -176,6 +177,7 @@ class Timeseries extends DataFrame {
 		return new Timeseries(df);
 	}
 	static aggregate(dataframes) {
+		dataframes = dataframes.map(df => new Timeseries(df));
 		const concatenated = DataFrame.concat(dataframes)
 			.groupBy(row => row.date)
 			.select(group => {
@@ -187,7 +189,8 @@ class Timeseries extends DataFrame {
 					.forEach(c => (o[c] = group.deflate(row => row[c]).sum()));
 				return o;
 			})
-			.inflate();
+			.inflate()
+			.toArray();
 		return new Timeseries(concatenated);
 	}
 }
