@@ -335,7 +335,6 @@ class Timeseries extends DataFrame {
 			.dropSeries("flags")
 			.dropSeries("raw");
 		return this;
-		s;
 	}
 	between(start, end) {
 		// inclusive

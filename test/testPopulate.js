@@ -3,12 +3,10 @@ const Timeseries = require("../index.js");
 let ts = Timeseries.blank(new Date(2019, 0, 4), new Date(2019, 1, 11), [
 	"day",
 	1
-]).populateAverage(1000);
-let ts1 = Timeseries.blank(new Date(2019, 1, 12), new Date(2019, 2, 2), [
-	"day",
-	1
-]).populateAverage(2000);
-let combined = Timeseries.concat([ts, ts1]).orderBy(row => row.date);
-console.log(combined.toString());
+]).populate(1000);
 
-let tt = Timeseries.merge(ts, ts1);
+
+let tss = new Timeseries([
+	{ date: new Date(2018, 1), value: 12 },
+	{ date: new Date(2018, 2), value: 32 },
+	{ date: new Date(2018, 4), value: 22 }]);
