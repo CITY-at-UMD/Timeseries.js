@@ -174,9 +174,10 @@ class Timeseries extends DataFrame {
 		])
 			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
 			.between(startDate, endDate);
-		return new Timeseries(df);
+		return df;
 	}
 	static aggregate(dataframes) {
+		if (!Array.isArray(dataframes)) dataframes = [dataframes];
 		dataframes = dataframes.map(df => new Timeseries(df));
 		const concatenated = DataFrame.concat(dataframes)
 			.groupBy(row => row.date)
