@@ -1,5 +1,6 @@
 const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
+const isBetween = require('dayjs/plugin/isBetween')
 const { msToInterval } = require("./Timeseries.interval");
 const _ = require("lodash");
 const { gapExists, gapFill, gapFillBlank } = require("./Timeseries.fill");
@@ -28,7 +29,8 @@ class Timeseries extends DataFrame {
 			.window(2)
 			.select(computeInterval)
 			.detectValues()
-			.orderBy(row => row.Frequency);
+			.orderBy(row => row.Frequency)
+			.orderBy(row => row.Value);
 		let val = intervals.last().Value;
 		return msToInterval(val);
 	}
@@ -44,6 +46,44 @@ class Timeseries extends DataFrame {
 	at(date) {
 		return super.at(new Date(date).valueOf());
 	}
+	calculateThresholds({ k, filterZeros = true } = {}) {
+		let noflags = this.where(row =>
+			row.flag === null || row.flag === undefined || (Array.isArray(row.flag) && row.flag.length === 0)
+		).where(row => !isNaN(row.value) && row.value !== null)
+			.getSeries("value");
+		if (filterZeros) noflags = noflags.where(value => value !== 0);
+		if (!k) {
+			k =
+				noflags.count() < 1000
+					? Math.floor(noflags.count() * 0.15)
+					: Math.min(...[1000, Math.floor(noflags.count() * 0.02)]);
+		}
+		if (noflags.count() < 5) return {};
+		let { thresholds: esd } = rosnerTest(noflags.toArray(), k);
+		let { thresholds: box } = boxPlotTest(noflags.toArray());
+		let { thresholds: modz } = modifiedZScoreTest(noflags.toArray());
+		return { esd, box, modz };
+	}
+	removeOutliers({ lowerThreshold, upperThreshold } = {}) {
+		if (lowerThreshold > upperThreshold) throw new Error("thresholds invalid")
+		let outlierCheck = (value, lowerThreshold, upperThreshold) =>
+			value < lowerThreshold || value > upperThreshold;
+		let df = this
+			.generateSeries({
+				raw: row => outlierCheck(row.value, lowerThreshold, upperThreshold) ? row.value : null,
+				flag: row => outlierCheck(row.value, lowerThreshold, upperThreshold) ? ['outlier'] : null,
+
+			}).transformSeries({
+				value: value => outlierCheck(value, lowerThreshold, upperThreshold) ? null : value
+			});
+		return df;
+
+	}
+	reset() {
+		return this.withSeries({
+			value: row => row.raw && !isNaN(row.raw) ? row.raw : row.value
+		}).dropSeries(['flag', 'raw']);
+	}
 	group(interval, toArray) {
 		if (["hour", "day", "month", "year"].indexOf(interval) === -1)
 			throw new Error("interval type not supported");
@@ -51,10 +91,11 @@ class Timeseries extends DataFrame {
 		let groups = this.groupBy(dateComparison);
 		return groups;
 	}
+	// Not Working Yet, downsample and upsample independently work
 	resample([duration, value = 1], fillType) {
 		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
 			throw new Error("interval type not supported");
-		let interval = this.getInterval();
+		let interval = this.interval;
 		if (_.isEqual(interval, [duration, value])) {
 			return this;
 		}
@@ -66,6 +107,13 @@ class Timeseries extends DataFrame {
 			.add(value, duration)
 			.diff(d0);
 		console.log(currentSampleDiff, newSampleDiff);
+		if (currentSampleDiff < newSampleDiff) {
+			console.log('downsample');
+			return this.downsample([duration, value], fillType);
+		} else {
+			console.log('upsample');
+			return this.upsample([duration, value], fillType);
+		}
 	}
 	upsample([duration, value], fillType = "avg") {
 		// Dont use this b/c it has the raw and flag values
@@ -80,8 +128,7 @@ class Timeseries extends DataFrame {
 			throw new Error("interval type not supported");
 		if (["sum", "avg", "median"].indexOf(fillType) === -1) {
 			throw new Error(
-				"aggregation type not suppported, only:",
-				aggregationTypes.toString()
+				"aggregation type not suppported, only:"
 			);
 		}
 		let dateComparison = row => dayjs(row.date).startOf(duration);
@@ -158,8 +205,51 @@ class Timeseries extends DataFrame {
 		};
 		return stats;
 	}
-	populateAverage(value) {
-		let v = value / this.getIndex().count();
+	dataQuality() {
+		let count = this.count();
+		let valid = this
+			.getSeries("flag")
+			.where(
+				value => value === null || value === undefined || (Array.isArray(value) && value.length === 0)
+			)
+			.count();
+		let missing = this
+			.getSeries("flag")
+			.where(value => Array.isArray(value))
+			.where(value => value.indexOf("missing") !== -1)
+			.count();
+		let invalid = this
+			.getSeries("flag")
+			.where(value => Array.isArray(value))
+			.where(value => value.indexOf("outlier") !== -1)
+			.count();
+		let zeroFill = this
+			.getSeries("flag")
+			.where(value => Array.isArray(value))
+			.where(value => value.indexOf("zeroFill") !== -1)
+			.count();
+		let breakdown = {
+			valid: valid / count,
+			missing: missing / count,
+			invalid: invalid / count
+		};
+		let report = {
+			accuracy: 0,
+			completeness: 0,
+			consistency: 0
+		};
+		return {  };
+	}
+	populate(value, type = 'avg') {
+		let v;
+		switch (type) {
+			case 'fill':
+				v = value;
+				break;
+			default:
+				v = value / this.getIndex().count();
+				break;
+		}
 		let df = this.generateSeries({ value: row => v });
 		return df;
 	}
