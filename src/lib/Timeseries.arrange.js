@@ -1,4 +1,4 @@
-const dayjs = require("dayjs");
+import dayjs from "dayjs";
 
 function group(df, interval = "day", toArray = true) {
 	if (["hour", "day", "month", "year"].indexOf(interval) < 0)
@@ -15,4 +15,4 @@ function group(df, interval = "day", toArray = true) {
 		return series;
 	}
 }
-module.exports = { group };
+export { group };

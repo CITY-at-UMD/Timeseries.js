@@ -1,4 +1,4 @@
-const dayjs = require("dayjs");
+import dayjs from "dayjs";
 
 const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
 	const startDate = pairA[0];
@@ -121,4 +121,4 @@ const gapFill = (
 	return newEntries;
 };
 
-module.exports = { gapExists, gapFill, gapFillBlank, gapFillNull, valueFiller };
+export { gapExists, gapFill, gapFillBlank, gapFillNull, valueFiller };

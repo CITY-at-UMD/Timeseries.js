@@ -2,14 +2,14 @@
 // https://vsp.pnnl.gov/help/Vsample/Rosners_Outlier_Test.htm
 // https://www.itl.nist.gov/div898/handbook/prc/section1/prc16.htm
 // https://www.math.ucla.edu/~tom/distributions/KolSmir2.html?
-const { DataFrame } = require("data-forge");
-const stats = require("simple-statistics");
-var { Studentt } = require("distributions");
-const dayjs = require("dayjs");
+import { DataFrame } from "data-forge";
+import { sampleStandardDeviation, mean as _mean, max, median as _median, medianAbsoluteDeviation, quantile } from "simple-statistics";
+import { Studentt } from "distributions";
+import dayjs from "dayjs";
 function rval(df) {
 	let values = df.deflate(row => row.x).toArray();
-	let std = stats.sampleStandardDeviation(values);
-	let mean = stats.mean(values);
+	let std = sampleStandardDeviation(values);
+	let mean = _mean(values);
 	if (std === 0) {
 		let ndf = df.generateSeries({ ares: row => 0 });
 		return { R: 0, std, mean, df: ndf };
@@ -17,7 +17,7 @@ function rval(df) {
 	let ndf = new DataFrame({
 		values: values.map(x => ({ x, ares: Math.abs(x - mean) / std }))
 	});
-	let R = stats.max(ndf.deflate(row => row.ares).toArray());
+	let R = max(ndf.deflate(row => row.ares).toArray());
 	return { R, df: ndf, std, mean };
 }
 
@@ -112,8 +112,8 @@ const modz = (value, mad, median) => {
 	return (0.6745 * (value - median)) / mad;
 };
 function modifiedZScoreTest(values) {
-	let median = stats.median(values);
-	let mad = stats.medianAbsoluteDeviation(values);
+	let median = _median(values);
+	let mad = medianAbsoluteDeviation(values);
 	values = values
 		.sort((a, b) => b - a)
 		.filter(v => v > 0)
@@ -132,8 +132,8 @@ function modifiedZScoreTest(values) {
 	return { thresholds: { upper, lower: 0 } };
 }
 function boxPlotTest(values) {
-	let q1 = stats.quantile(values, 0.25);
-	let q3 = stats.quantile(values, 0.75);
+	let q1 = quantile(values, 0.25);
+	let q3 = quantile(values, 0.75);
 	let iqr = q3 - q1;
 	return {
 		thresholds: {
@@ -255,7 +255,7 @@ function quality(df) {
 	return { breakdown, report, count };
 }
 
-module.exports = {
+export {
 	rosnerTest,
 	modifiedZScoreTest,
 	boxPlotTest,

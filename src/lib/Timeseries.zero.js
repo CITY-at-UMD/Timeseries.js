@@ -1,4 +1,4 @@
-const { DataFrame } = require("data-forge");
+import { DataFrame } from "data-forge";
 
 const zerogrouping = (dataframe) => {
 	// group sequential
@@ -39,4 +39,4 @@ function zeroReplacement(df, threshold) {
 
 	return merged;
 }
-module.exports = { zerogrouping, zeroReplacement, zeroCheck };
+export { zerogrouping, zeroReplacement, zeroCheck };

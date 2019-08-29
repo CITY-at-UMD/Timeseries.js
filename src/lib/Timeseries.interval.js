@@ -1,4 +1,4 @@
-const dayjs = require("dayjs");
+import dayjs from "dayjs";
 
 const msToInterval = ms => {
   let start = dayjs();
@@ -33,4 +33,4 @@ function calculateInterval(df, startDate, endDate) {
   let val = intervals.last().Value;
   return msToInterval(val);
 }
-module.exports = { msToInterval, calculateInterval };
+export { msToInterval, calculateInterval };

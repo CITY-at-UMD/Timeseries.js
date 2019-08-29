@@ -1,4 +1,4 @@
-const { gapExists, gapFill } = require("./Timeseries.fill");
+import { gapExists, gapFill } from "./Timeseries.fill";
 
 function resample(df, interval = ["day", 1], {fillType}) {
 	// if (!(dataframe instanceof DataFrame)) dataframe = new Timeseries(dataframe);
@@ -12,4 +12,4 @@ function resample(df, interval = ["day", 1], {fillType}) {
 	// .bake();
 	return filled;
 }
-module.exports = { resample };
+export { resample };

@@ -1,21 +1,11 @@
-const dataForge = require("data-forge");
+import { DataFrame } from "data-forge";
 // require("data-forge-fs");
-const {
-  gapExists,
-  gapFillBlank,
-  valueFiller
-} = require("./Timeseries.fill");
-const { calculateInterval } = require("./Timeseries.interval");
-const {
-  calculateOutlierThresholds,
-  isOutlier,
-  validMean,
-  validMonthlyMeanMap,
-  zeroReplacement
-} = require("./Timeseries.statistics");
+import { gapExists, gapFillBlank, valueFiller } from "./Timeseries.fill";
+import { calculateInterval } from "./Timeseries.interval";
+import { calculateOutlierThresholds, isOutlier, validMean, validMonthlyMeanMap, zeroReplacement } from "./Timeseries.statistics";
 
 function processTimeseries(ts, { zeroThreshold = 96 } = {}) {
-  let df = new dataForge.DataFrame(ts)
+  let df = new DataFrame(ts)
     .generateSeries({
       flag: row => []
     })
@@ -39,14 +29,14 @@ function processTimeseries(ts, { zeroThreshold = 96 } = {}) {
       })
     };
   });
-  df = new dataForge.DataFrame(data).withIndex(row =>
+  df = new DataFrame(data).withIndex(row =>
     new Date(row.date).valueOf()
   );
   df = zeroReplacement(df, zeroThreshold);
   const mean = validMean(df);
   const monthly = validMonthlyMeanMap(df);
   // fill data
-  df = new dataForge.DataFrame(
+  df = new DataFrame(
     df.toArray().map(row => {
       if (row.value === null || row.value === undefined) {
         let { value, flag } = valueFiller(
@@ -74,4 +64,4 @@ function processTimeseries(ts, { zeroThreshold = 96 } = {}) {
   return { df, threshold, mean, monthly };
 }
 
-module.exports = { processTimeseries };
+export { processTimeseries };

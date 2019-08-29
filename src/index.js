@@ -1,18 +1,11 @@
-const { DataFrame } = require("data-forge");
-const dayjs = require("dayjs");
+import { DataFrame } from "data-forge";
+import dayjs from "dayjs";
 // const isBetween = require('dayjs/plugin/isBetween')
-const { msToInterval } = require("./lib/Timeseries.interval");
-const isEqual = require("lodash/isEqual");
-const fromPairs = require("lodash/fromPairs");
-const {
-  gapExists,
-  gapFill,
-  gapFillBlank
-} = require("./lib/Timeseries.fill");
-const {
-  medianAbsoluteDeviation,
-  quantile
-} = require("simple-statistics");
+import { msToInterval } from "./lib/Timeseries.interval";
+import isEqual from "lodash/isEqual";
+import fromPairs from "lodash/fromPairs";
+import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
+import { medianAbsoluteDeviation, quantile } from "simple-statistics";
 class Timeseries extends DataFrame {
   constructor(data = []) {
     if (
@@ -338,4 +331,4 @@ class Timeseries extends DataFrame {
     return new Timeseries(concatenated);
   }
 }
-module.exports = Timeseries;
+export default Timeseries;
