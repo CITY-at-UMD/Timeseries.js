@@ -1,4 +1,3 @@
-const { DataFrame } = require("data-forge");
 const { gapExists, gapFill } = require("./Timeseries.fill");
 
 function resample(df, interval = ["day", 1], {fillType}) {

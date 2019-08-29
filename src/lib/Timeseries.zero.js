@@ -1,7 +1,6 @@
 const { DataFrame } = require("data-forge");
-const stats = require("simple-statistics");
 
-const zerogrouping = (dataframe, column) => {
+const zerogrouping = (dataframe) => {
 	// group sequential
 	let df = dataframe.variableWindow((a, b) => a.value === b.value);
 	console.log(df.toString());
@@ -29,7 +28,7 @@ function zeroReplacement(df, threshold) {
 	let dfs = zeroGroups.toArray().map(zdf => {
 		zdf = zdf
 			.transformSeries({
-				value: value => null,
+				value: () => null,
 				raw: 0,
 				flag: value => ["zero", ...(value || [])]
 			})
