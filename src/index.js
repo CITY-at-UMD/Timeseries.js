@@ -4,8 +4,15 @@ import dayjs from "dayjs";
 import { msToInterval } from "./lib/Timeseries.interval";
 import isEqual from "lodash/isEqual";
 import fromPairs from "lodash/fromPairs";
-import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
-import { medianAbsoluteDeviation, quantile } from "simple-statistics";
+import {
+  gapExists,
+  gapFill,
+  gapFillBlank
+} from "./lib/Timeseries.fill";
+import {
+  medianAbsoluteDeviation,
+  quantile
+} from "simple-statistics";
 class Timeseries extends DataFrame {
   constructor(data = []) {
     if (
@@ -136,12 +143,9 @@ class Timeseries extends DataFrame {
     let newSampleDiff = dayjs(0)
       .add(value, duration)
       .diff(d0);
-    console.log(currentSampleDiff, newSampleDiff);
     if (currentSampleDiff < newSampleDiff) {
-      console.log("downsample");
       return this.downsample([duration, value], fillType);
     } else {
-      console.log("upsample");
       return this.upsample([duration, value], fillType);
     }
   }
@@ -288,6 +292,16 @@ class Timeseries extends DataFrame {
     let df = this.generateSeries({ value: row => v });
     return df;
   }
+  fill(interval, fillType) {
+    // let interval = this.interval;
+    if (!interval || !Array.isArray(interval))
+      interval = this.interval;
+    let ndf = this.fillGaps(
+      gapExists(interval),
+      gapFill(fillType, interval)
+    );
+    return new Timeseries(ndf);
+  }
   static blank(startDate, endDate, [duration, value = 1]) {
     if (
       ["minute", "hour", "day", "month", "year"].indexOf(
@@ -306,8 +320,6 @@ class Timeseries extends DataFrame {
         gapFillBlank([duration, value])
       )
       .between(startDate, endDate);
-    console.log(df instanceof Timeseries);
-    console.log(df instanceof DataFrame);
     return new Timeseries(df);
   }
   static aggregate(dataframes) {

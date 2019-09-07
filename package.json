@@ -1,6 +1,6 @@
 {
   "name": "Timeseries",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "license": "MIT",
   "dependencies": {
     "data-forge": "^1.7.2",
@@ -15,11 +15,13 @@
   },
   "source": "src/index.js",
   "main": "dist/index.js",
-  "module": "dist/index.mjs",
-  "unpkg": "dist/index.umd.js",
+  "module": "dist/index.module.js",
+  "umd:main": "dist/index.min.js",
+  "browser": "dist/index.min.js",
+  "unpkg": "dist/index.min.js",
   "scripts": {
     "test": "jest",
-    "build": "microbundle",
+    "build": "microbundle --name Timeseries",
     "dev": "microbundle watch"
   }
 }

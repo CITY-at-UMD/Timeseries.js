@@ -1,8 +1,18 @@
 import { DataFrame } from "data-forge";
 // require("data-forge-fs");
-import { gapExists, gapFillBlank, valueFiller } from "./Timeseries.fill";
+import {
+  gapExists,
+  gapFillBlank,
+  valueFiller
+} from "./Timeseries.fill";
 import { calculateInterval } from "./Timeseries.interval";
-import { calculateOutlierThresholds, isOutlier, validMean, validMonthlyMeanMap, zeroReplacement } from "./Timeseries.statistics";
+import {
+  calculateOutlierThresholds,
+  isOutlier,
+  validMean,
+  validMonthlyMeanMap,
+  zeroReplacement
+} from "./Timeseries.statistics";
 
 function processTimeseries(ts, { zeroThreshold = 96 } = {}) {
   let df = new DataFrame(ts)
