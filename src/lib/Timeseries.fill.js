@@ -1,124 +1,193 @@
 import dayjs from "dayjs";
-
-const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize = Math.floor(
-		dayjs(endDate).diff(startDate, duration, true) / durationValue
-	);
-	if (gapSize > 0) return true;
-	return false;
+import _ from "lodash";
+import fromPairs from "lodash/fromPairs";
+import toPairs from "lodash/toPairs";
+const gapExists = ([duration, durationValue = 1]) => (
+  pairA,
+  pairB
+) => {
+  const startDate = pairA[0];
+  const endDate = pairB[0];
+  let gapSize = Math.floor(
+    dayjs(endDate).diff(startDate, duration, true) /
+      durationValue
+  );
+  console.log(gapSize);
+  if (gapSize > 0) return true;
+  return false;
 };
 const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize;
-	if (interval === "quarterHour") {
-		gapSize = Math.floor(dayjs(endDate).diff(startDate, "minutes") / 15);
-	} else {
-		gapSize = dayjs(endDate).diff(startDate, interval);
-	}
-	if (maxGap && maxGap > gapSize) return false;
-	if (gapSize > 0) return true;
-	return false;
+  const startDate = pairA[0];
+  const endDate = pairB[0];
+  let gapSize;
+  if (interval === "quarterHour") {
+    gapSize = Math.floor(
+      dayjs(endDate).diff(startDate, "minutes") / 15
+    );
+  } else {
+    gapSize = dayjs(endDate).diff(startDate, interval);
+  }
+  if (maxGap && maxGap > gapSize) return false;
+  if (gapSize > 0) return true;
+  return false;
 };
 
-const gapFillNull = ([duration, durationValue], flag) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize = Math.floor(
-		dayjs(endDate).diff(startDate, duration) / durationValue
-	);
-	const numEntries = gapSize - 1;
-	const newEntries = [];
+const gapFillNull = ([duration, durationValue], flag) => (
+  pairA,
+  pairB
+) => {
+  const startDate = pairA[0];
+  const endDate = pairB[0];
+  let gapSize = Math.floor(
+    dayjs(endDate).diff(startDate, duration) / durationValue
+  );
+  const numEntries = gapSize - 1;
+  const newEntries = [];
 
-	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-		let date = dayjs(startDate)
-			.add((entryIndex + 1) * durationValue, duration)
-			.toDate();
-		newEntries.push([
-			date.valueOf(),
-			{ date, value: null, ...(flag && { flag: [flag] }) }
-		]);
-	}
-	return newEntries;
+  for (
+    let entryIndex = 0;
+    entryIndex < numEntries;
+    ++entryIndex
+  ) {
+    let date = dayjs(startDate)
+      .add((entryIndex + 1) * durationValue, duration)
+      .toDate();
+    newEntries.push([
+      date.valueOf(),
+      { date, value: null, ...(flag && { flag: [flag] }) }
+    ]);
+  }
+  return newEntries;
 };
 const gapFillBlank = gapFillNull;
 
 const valueFiller = (
-	fillType,
-	{ startValue, endValue, entryIndex, numEntries },
-	{ overrideValue, dateFunction, date, flag: overRideFlag }
+  fillType,
+  { startValue, endValue, entryIndex, numEntries },
+  { overrideValue, dateFunction, date, flag }
 ) => {
-	if (
-		["pad", "interpolate", "average"].indexOf(fillType) !== -1 &&
-		(!startValue || !endValue || !entryIndex || !numEntries)
-	)
-		throw new Error("fill Type not supported without date, index and entries");
-	let value, flag;
-	if (fillType === "pad") {
-		value = startValue.value;
-		if (overrideValue) value = overrideValue;
+  if (
+    [
+      "pad",
+      "interpolate",
+      "average",
+      "dateFunction",
+      "value"
+    ].indexOf(fillType) === -1
+  ) {
+    throw new Error("fill Type not supported");
+  }
+  let value;
+  if (fillType === "pad") {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        return [key, startValue[key]];
+      })
+    );
 
-		flag = ["fill", fillType];
-	} else if (fillType === "interpolate") {
-		value =
-			startValue.value +
-			(entryIndex + 1) * ((endValue.value - startValue.value) / numEntries);
-		if (overrideValue) value = overrideValue;
+    flag = flag ? flag : ["fill", "pad"];
+  } else if (fillType === "interpolate") {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        let nv =
+          startValue[key] +
+          (entryIndex + 1) *
+            ((endValue[key] - startValue[key]) /
+              (numEntries + 1));
+        return [key, nv];
+      })
+    );
 
-		flag = ["fill", fillType];
-	} else if (fillType === "average") {
-		value = (startValue.value + endValue.value) / numEntries;
-		if (overrideValue) value = overrideValue / numEntries;
-		flag = ["fill", fillType];
-	} else if (fillType === "dateFunction" && dateFunction) {
-		value = dateFunction(date);
-		flag = ["fill", fillType];
-	} else if (fillType === "value" && !isNaN(overrideValue) && overrideValue) {
-		value = overrideValue;
-		flag = ["fill", fillType];
-	} else {
-		value = null;
-		flag = ["fill"];
-	}
-	if (overRideFlag) flag = overRideFlag;
-	return { value, flag };
+    flag = flag ? flag : ["fill", fillType];
+  } else if (fillType === "average") {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        let nv = (startValue[key] + endValue[key]) / numEntries;
+        return [key, nv];
+      })
+    );
+
+    flag = flag ? flag : ["fill", fillType];
+  } else if (fillType === "dateFunction" && dateFunction) {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        let nv = dateFunction(date);
+        return [key, nv];
+      })
+    );
+    flag = flag ? flag : ["fill", fillType];
+  } else if (fillType === "value") {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        let nv;
+        if (typeof overrideValue === "number") {
+          nv = overrideValue;
+        } else {
+          nv = overrideValue[key];
+        }
+        return [key, nv];
+      })
+    );
+    flag = flag ? flag : ["fill", fillType];
+  } else {
+    value = fromPairs(
+      toPairs(startValue).map(([key, val]) => {
+        return [key, null];
+      })
+    );
+    flag = ["fill"];
+  }
+  return { ...value, flag };
 };
 
 const gapFill = (
-	fillType,
-	[duration, durationValue],
-	{ overrideValue, dateFunction, flag } = {}
+  fillType,
+  [duration, durationValue],
+  { overrideValue, dateFunction, flag } = {}
 ) => (pairA, pairB) => {
-	// Fill values forward.
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize = Math.floor(
-		dayjs(endDate).diff(startDate, duration) / durationValue
-	);
-	const numEntries = gapSize - 1;
-	const startValue = pairA[1];
-	const endValue = pairB[1];
-	const newEntries = [];
-	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-		let adjustment = valueFiller(
-				fillType,
-				{ startValue, endValue, entryIndex, numEntries },
-				{
-					overrideValue,
-					dateFunction,
-					flag
-				}
-			),
-			date = dayjs(startDate)
-				.add((entryIndex + 1) * durationValue, duration)
-				.toDate();
-
-		let e = [date.valueOf(), Object.assign({}, adjustment, { date })];
-		newEntries.push(e);
-	}
-	return newEntries;
+  // Fill values forward.
+  console.log(pairA, pairB);
+  const startDate = dayjs(pairA[0]);
+  const endDate = dayjs(pairB[0]);
+  let gapSize = Math.floor(
+    dayjs(endDate).diff(startDate, duration) / durationValue
+  );
+  const numEntries = gapSize - 1;
+  const startValue = pairA[1];
+  const endValue = pairB[1];
+  const newEntries = [];
+  for (
+    let entryIndex = 0;
+    entryIndex < numEntries;
+    ++entryIndex
+  ) {
+    let adjustment = valueFiller(
+        fillType,
+        { startValue, endValue, entryIndex, numEntries },
+        {
+          overrideValue,
+          dateFunction,
+          flag
+        }
+      ),
+      date = dayjs(startDate)
+        .add((entryIndex + 1) * durationValue, duration)
+        .toDate();
+    // console.log(adjustment, date);
+    let e = [
+      date.valueOf(),
+      Object.assign({}, adjustment, { date })
+    ];
+    newEntries.push(e);
+  }
+  console.log(newEntries);
+  return newEntries;
 };
 
-export { gapExists, gapFill, gapFillBlank, gapFillNull, valueFiller };
+export {
+  gapExists,
+  gapFill,
+  gapFillBlank,
+  gapFillNull,
+  valueFiller
+};
