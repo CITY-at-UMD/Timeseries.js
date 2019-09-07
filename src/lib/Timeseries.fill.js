@@ -173,7 +173,6 @@ const gapFill = (
       date = dayjs(startDate)
         .add((entryIndex + 1) * durationValue, duration)
         .toDate();
-    // console.log(adjustment, date);
     let e = [
       date.valueOf(),
       Object.assign({}, adjustment, { date })
