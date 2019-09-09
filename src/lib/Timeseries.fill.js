@@ -12,7 +12,7 @@ const gapExists = ([duration, durationValue = 1]) => (
     dayjs(endDate).diff(startDate, duration, true) /
       durationValue
   );
-  console.log(gapSize);
+
   if (gapSize > 0) return true;
   return false;
 };
@@ -146,7 +146,7 @@ const gapFill = (
   { overrideValue, dateFunction, flag } = {}
 ) => (pairA, pairB) => {
   // Fill values forward.
-  console.log(pairA, pairB);
+
   const startDate = dayjs(pairA[0]);
   const endDate = dayjs(pairB[0]);
   let gapSize = Math.floor(
@@ -179,7 +179,7 @@ const gapFill = (
     ];
     newEntries.push(e);
   }
-  console.log(newEntries);
+
   return newEntries;
 };
 
