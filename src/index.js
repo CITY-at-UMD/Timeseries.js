@@ -9,7 +9,8 @@ import { medianAbsoluteDeviation, quantile } from "simple-statistics";
 
 class Timeseries extends DataFrame {
 	constructor(data = []) {
-		if (data instanceof DataFrame || data instanceof Timeseries) {
+		if (data instanceof Timeseries) return data;
+		if (data instanceof DataFrame) {
 			data = data.toArray();
 		}
 		// sort
@@ -19,6 +20,9 @@ class Timeseries extends DataFrame {
 		let config = {
 			values: data,
 			index: data.map(({ date }) => new Date(date).valueOf()),
+			// columns: [
+			// 	...new Set(data.map(o => Object.keys(o)).reduce((a, b) => a.concat(b)))
+			// ]
 			considerAllRows: true
 		};
 		super(config);
@@ -72,112 +76,6 @@ class Timeseries extends DataFrame {
 		let { thresholds: box } = boxPlotTest(noflags.toArray());
 		let { thresholds: modz } = modifiedZScoreTest(noflags.toArray());
 		return { esd, box, modz };
-	}
-	removeOutliers({ lowerThreshold, upperThreshold } = {}) {
-		if (lowerThreshold > upperThreshold) throw new Error("thresholds invalid");
-		let outlierCheck = (value, lowerThreshold, upperThreshold) =>
-			value < lowerThreshold || value > upperThreshold;
-		let df = this.generateSeries({
-			raw: row =>
-				outlierCheck(row.value, lowerThreshold, upperThreshold)
-					? row.value
-					: null,
-			flag: row =>
-				outlierCheck(row.value, lowerThreshold, upperThreshold)
-					? ["outlier"]
-					: null
-		}).transformSeries({
-			value: value =>
-				outlierCheck(value, lowerThreshold, upperThreshold) ? null : value
-		});
-		return df;
-	}
-	reset() {
-		return this.withSeries({
-			value: row => (row.raw && !isNaN(row.raw) ? row.raw : row.value)
-		}).dropSeries(["flag", "raw"]);
-	}
-	group(interval, toArray) {
-		if (["hour", "day", "month", "year"].indexOf(interval) === -1)
-			throw new Error("interval type not supported");
-		let dateComparison = row => dayjs(row.date).startOf(interval);
-		let groups = this.groupBy(dateComparison);
-		return groups;
-	}
-	// Not Working Yet, downsample and upsample independently work
-	resample([duration, value = 1], fillType) {
-		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
-			throw new Error("interval type not supported");
-		let interval = this.interval;
-		if (isEqual(interval, [duration, value])) {
-			return this;
-		}
-		let d0 = dayjs(0);
-		let currentSampleDiff = dayjs(0)
-			.add(interval[1], interval[0])
-			.diff(d0);
-		let newSampleDiff = dayjs(0)
-			.add(value, duration)
-			.diff(d0);
-		if (currentSampleDiff < newSampleDiff) {
-			return this.downsample([duration, value], fillType);
-		} else {
-			return this.upsample([duration, value], fillType);
-		}
-	}
-	upsample([duration, value], fillType = "avg") {
-		// Dont use this b/c it has the raw and flag values
-		let df = this.fillGaps(
-			gapExists([duration, value]),
-			gapFill(fillType, [duration, value])
-		);
-		return df;
-	}
-	downsample([duration, value], fillType = "sum") {
-		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
-			throw new Error("interval type not supported");
-		if (["sum", "avg", "median"].indexOf(fillType) === -1) {
-			throw new Error("aggregation type not suppported, only:");
-		}
-		let dateComparison = row => dayjs(row.date).startOf(duration);
-		if (value)
-			dateComparison = row =>
-				dayjs(row.date)
-					.startOf(duration)
-					.add(value, duration);
-		let df = this.groupBy(dateComparison)
-			.select(group => {
-				const date = dayjs(group.first().date)
-					.startOf(duration)
-					.toDate();
-				return {
-					date,
-					...fromPairs(
-						group
-							.getColumnNames()
-							.filter(col => col !== "date")
-							.map(col => {
-								let value;
-								switch (fillType) {
-									case "median":
-										value = group.deflate(row => row[col]).median();
-										break;
-									case "avg":
-										value = group.deflate(row => row[col]).average();
-										break;
-									default:
-										// sum
-										value = group.deflate(row => row[col]).sum();
-										break;
-								}
-								return [col, value];
-							})
-					)
-				};
-			})
-			.inflate()
-			.withIndex(row => row.date.valueOf());
-		return df;
 	}
 	calculateStatistics({
 		column = "value",
@@ -247,6 +145,137 @@ class Timeseries extends DataFrame {
 		};
 		return {};
 	}
+	// Chainable Methods
+	transformAll(adjustmentFunction = v => v, columns) {
+		let df = this;
+		if (!columns) {
+			columns = df
+				.detectTypes()
+				.where(row => row.Type === "number")
+				.distinct(row => row.Column)
+				.getSeries("Column")
+				.toArray();
+		}
+		columns.forEach(col => {
+			df = df.transformSeries({
+				[col]: value => {
+					if (isNaN(value)) {
+						return value;
+					} else {
+						return adjustmentFunction(value);
+					}
+				}
+			});
+		});
+		return new Timeseries(df);
+	}
+	removeOutliers({ lowerThreshold, upperThreshold } = {}) {
+		if (lowerThreshold > upperThreshold) throw new Error("thresholds invalid");
+		let outlierCheck = (value, lowerThreshold, upperThreshold) =>
+			value < lowerThreshold || value > upperThreshold;
+		let df = this.generateSeries({
+			raw: row =>
+				outlierCheck(row.value, lowerThreshold, upperThreshold)
+					? row.value
+					: null,
+			flag: row =>
+				outlierCheck(row.value, lowerThreshold, upperThreshold)
+					? ["outlier"]
+					: null
+		}).transformSeries({
+			value: value =>
+				outlierCheck(value, lowerThreshold, upperThreshold) ? null : value
+		});
+		return new Timeseries(df);
+	}
+	reset() {
+		return this.withSeries({
+			value: row => (row.raw && !isNaN(row.raw) ? row.raw : row.value)
+		}).dropSeries(["flag", "raw"]);
+	}
+	group(interval, toArray) {
+		if (["hour", "day", "month", "year"].indexOf(interval) === -1)
+			throw new Error("interval type not supported");
+		let dateComparison = row => dayjs(row.date).startOf(interval);
+		let groups = this.groupBy(dateComparison);
+		return groups;
+	}
+	// Not Working Yet, downsample and upsample independently work
+	resample([duration, value = 1], fillType) {
+		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
+			throw new Error("interval type not supported");
+		let interval = this.interval;
+		if (isEqual(interval, [duration, value])) {
+			return this;
+		}
+		let d0 = dayjs(0);
+		let currentSampleDiff = dayjs(0)
+			.add(interval[1], interval[0])
+			.diff(d0);
+		let newSampleDiff = dayjs(0)
+			.add(value, duration)
+			.diff(d0);
+		if (currentSampleDiff < newSampleDiff) {
+			return this.downsample([duration, value], fillType);
+		} else {
+			return this.upsample([duration, value], fillType);
+		}
+	}
+	upsample([duration, value], fillType = "avg") {
+		// Dont use this b/c it has the raw and flag values
+		let df = this.fillGaps(
+			gapExists([duration, value]),
+			gapFill(fillType, [duration, value])
+		);
+		return new Timeseries(df);
+	}
+	downsample([duration, value], fillType = "sum") {
+		if (["hour", "day", "month", "year"].indexOf(duration) === -1)
+			throw new Error("interval type not supported");
+		if (["sum", "avg", "median"].indexOf(fillType) === -1) {
+			throw new Error("aggregation type not suppported, only:");
+		}
+		let dateComparison = row => dayjs(row.date).startOf(duration);
+		if (value)
+			dateComparison = row =>
+				dayjs(row.date)
+					.startOf(duration)
+					.add(value, duration);
+		let df = this.groupBy(dateComparison)
+			.select(group => {
+				const date = dayjs(group.first().date)
+					.startOf(duration)
+					.toDate();
+				return {
+					date,
+					...fromPairs(
+						group
+							.getColumnNames()
+							.filter(col => col !== "date")
+							.map(col => {
+								let value;
+								switch (fillType) {
+									case "median":
+										value = group.deflate(row => row[col]).median();
+										break;
+									case "avg":
+										value = group.deflate(row => row[col]).average();
+										break;
+									default:
+										// sum
+										value = group.deflate(row => row[col]).sum();
+										break;
+								}
+								return [col, value];
+							})
+					)
+				};
+			})
+			.inflate()
+			.withIndex(row => row.date.valueOf());
+		return new Timeseries(df);
+	}
+
 	populate(value, type = "avg") {
 		let v;
 		switch (type) {
@@ -258,7 +287,7 @@ class Timeseries extends DataFrame {
 				break;
 		}
 		let df = this.generateSeries({ value: row => v });
-		return df;
+		return new Timeseries(df);
 	}
 	fill(interval, fillType) {
 		// let interval = this.interval;
@@ -287,6 +316,7 @@ class Timeseries extends DataFrame {
 		});
 		return new Timeseries(arr);
 	}
+	// Static Methods
 	static blank(startDate, endDate, [duration, value = 1]) {
 		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
 			console.error(interval);
