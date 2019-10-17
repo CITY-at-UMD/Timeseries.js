@@ -1,5 +1,4 @@
 const Timeseries = require("../dist/index");
-const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
 
 let monthlyData = new Array(54).fill(0).map((x, i) => {
@@ -15,7 +14,19 @@ let monthlyData = new Array(54).fill(0).map((x, i) => {
 	};
 });
 let ndf = new Timeseries(monthlyData);
+// .withIndex(row => row.date.toDate())
+// .orderBy(row => row.date);
 console.log(ndf.toString());
+console.log(
+	ndf
+		.getIndex()
+		.detectTypes()
+		.toString()
+);
+console.log(ndf.getIndex().first());
+console.log(
+	ndf.between(dayjs(new Date(2018, 0)), dayjs(new Date(2019, 0))).toString()
+);
 
 ndf = ndf.annualIntensity();
 console.log(ndf.toString());

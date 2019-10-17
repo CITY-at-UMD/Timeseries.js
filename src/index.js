@@ -21,23 +21,16 @@ class Timeseries extends DataFrame {
 			.sort((a, b) => a.date.valueOf() - b.date.valueOf());
 		let config = {
 			values: data,
-			index: data.map(({ date }) => date),
-			// columns: [
-			// 	...new Set(data.map(o => Object.keys(o)).reduce((a, b) => a.concat(b)))
-			// ]
+			index: data.map(({ date }) => date.toDate()),
 			considerAllRows: true
 		};
 		super(config);
 	}
 	get interval() {
-		// let startDate = this.first().date;
-		// let endDate = this.last().date;
 		function computeInterval(window) {
 			return window.last() - window.first();
 		}
-		const intervals = this
-			// .between(startDate, endDate)
-			.getIndex()
+		const intervals = this.getIndex()
 			.window(2)
 			.select(computeInterval)
 			.detectValues()
@@ -298,7 +291,7 @@ class Timeseries extends DataFrame {
 				};
 			})
 			.inflate()
-			.withIndex(row => row.date.valueOf());
+			.withIndex(row => dayjs(row.date).toDate());
 		return new Timeseries(df);
 	}
 
