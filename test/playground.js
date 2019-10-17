@@ -1,27 +1,21 @@
 const Timeseries = require("../dist/index");
+const { DataFrame } = require("data-forge");
 const dayjs = require("dayjs");
-let data = new Array(5).fill(2015).map((year, i) => {
+
+let monthlyData = new Array(54).fill(0).map((x, i) => {
+	let date = dayjs()
+		.startOf("month")
+		.subtract(i, "month");
+
 	return {
-		date: dayjs()
-			.year(year + i)
-			.startOf("year")
-			.toDate(),
-		value: Math.random() * 100
+		date,
+		...(date.month() % 4 && { forecast: Math.random() * 12 }),
+		value: Math.random() * 15,
+		units: "kWh"
 	};
 });
-data.push({ date: new Date(2021, 0), forecast: 123 });
-data.push({
-	date: new Date(2022, 0),
-	forecast: 122,
-	flag: ["forecast", "fill"]
-});
-let df = new Timeseries(data);
-let valueColumns = df
-	.detectTypes()
-	.where(row => row.Type === "number")
-	.distinct(row => row.Column)
-	.getSeries("Column")
-	.toArray();
-// console.log(valueColumns);
-df = df.transformAll(v => v / 100);
-console.log(df.toString());
+let ndf = new Timeseries(monthlyData);
+console.log(ndf.toString());
+
+ndf = ndf.annualIntensity();
+console.log(ndf.toString());

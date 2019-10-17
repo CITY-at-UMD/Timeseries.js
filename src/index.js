@@ -7,6 +7,8 @@ import fromPairs from "lodash/fromPairs";
 import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
 import { medianAbsoluteDeviation, quantile } from "simple-statistics";
 
+const annualScale = (start, end) => 365 / dayjs(end).diff(dayjs(start), "day");
+
 class Timeseries extends DataFrame {
 	constructor(data = []) {
 		if (data instanceof Timeseries) return data;
@@ -14,12 +16,12 @@ class Timeseries extends DataFrame {
 			data = data.toArray();
 		}
 		// sort
-		data = data.sort(
-			(a, b) => new Date(a.date).valueOf() - new Date(b.date).valueOf()
-		);
+		data = data
+			.map(({ date, ...others }) => ({ date: dayjs(date), ...others }))
+			.sort((a, b) => a.date.valueOf() - b.date.valueOf());
 		let config = {
 			values: data,
-			index: data.map(({ date }) => new Date(date).valueOf()),
+			index: data.map(({ date }) => date),
 			// columns: [
 			// 	...new Set(data.map(o => Object.keys(o)).reduce((a, b) => a.concat(b)))
 			// ]
@@ -28,12 +30,13 @@ class Timeseries extends DataFrame {
 		super(config);
 	}
 	get interval() {
-		let startDate = this.first().date;
-		let endDate = this.last().date;
+		// let startDate = this.first().date;
+		// let endDate = this.last().date;
 		function computeInterval(window) {
 			return window.last() - window.first();
 		}
-		const intervals = this.between(startDate, endDate)
+		const intervals = this
+			// .between(startDate, endDate)
 			.getIndex()
 			.window(2)
 			.select(computeInterval)
@@ -42,6 +45,13 @@ class Timeseries extends DataFrame {
 			.orderBy(row => row.Value);
 		let val = intervals.last().Value;
 		return msToInterval(val);
+	}
+	get valueColumns() {
+		return this.detectTypes()
+			.where(row => row.Type === "number")
+			.distinct(row => row.Column)
+			.getSeries("Column")
+			.toArray();
 	}
 	dateRange(unit, adjustment) {
 		let start = dayjs(this.first().date),
@@ -53,7 +63,7 @@ class Timeseries extends DataFrame {
 		return end.diff(start, unit);
 	}
 	at(date) {
-		return super.at(new Date(date).valueOf());
+		return super.at(dayjs(date));
 	}
 	calculateThresholds({ k, filterZeros = true } = {}) {
 		let noflags = this.where(
@@ -235,40 +245,56 @@ class Timeseries extends DataFrame {
 		if (["sum", "avg", "median"].indexOf(fillType) === -1) {
 			throw new Error("aggregation type not suppported, only:");
 		}
-		let dateComparison = row => dayjs(row.date).startOf(duration);
-		if (value)
-			dateComparison = row =>
-				dayjs(row.date)
-					.startOf(duration)
-					.add(value, duration);
+		let dateComparison = row => row.date.startOf(duration);
+		let valueColumns = this.valueColumns;
+		if (value) {
+			dateComparison = row => row.date.startOf(duration).add(value, duration);
+		}
+
 		let df = this.groupBy(dateComparison)
 			.select(group => {
-				const date = dayjs(group.first().date)
-					.startOf(duration)
-					.toDate();
+				const date = group.first().date.startOf(duration);
 				return {
 					date,
-					...fromPairs(
-						group
+					...fromPairs([
+						...valueColumns.map(col => {
+							let value;
+							switch (fillType) {
+								case "median":
+									value = group
+										.deflate(row => row[col])
+										.where(v => v)
+										.median();
+									break;
+								case "avg":
+									value = group
+										.deflate(row => row[col])
+										.where(v => v)
+										.average();
+									break;
+								default:
+									// sum
+									value = group
+										.deflate(row => row[col])
+										.where(v => v)
+										.sum();
+									break;
+							}
+							return [col, value];
+						}),
+						...group
 							.getColumnNames()
 							.filter(col => col !== "date")
+							.filter(col => valueColumns.indexOf(col) === -1)
 							.map(col => {
-								let value;
-								switch (fillType) {
-									case "median":
-										value = group.deflate(row => row[col]).median();
-										break;
-									case "avg":
-										value = group.deflate(row => row[col]).average();
-										break;
-									default:
-										// sum
-										value = group.deflate(row => row[col]).sum();
-										break;
-								}
+								let value = group
+									.deflate(row => row[col])
+									.distinct()
+									.toArray();
+								if (value.length === 1) value = value[0];
 								return [col, value];
 							})
-					)
+					])
 				};
 			})
 			.inflate()
@@ -323,8 +349,8 @@ class Timeseries extends DataFrame {
 			throw new Error("interval type not supported");
 		}
 		let df = new Timeseries([
-			{ date: new Date(startDate) },
-			{ date: new Date(endDate) }
+			{ date: dayjs(startDate) },
+			{ date: dayjs(endDate) }
 		])
 			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
 			.between(startDate, endDate);
@@ -355,6 +381,37 @@ class Timeseries extends DataFrame {
 			endDate
 		);
 		let avg = months.getSeries("value").average();
+	}
+	// Building Functions
+	annualIntensity(normalizeValue = 1) {
+		let interval = this.interval;
+		let annual = this.groupBy(row => row.date.year())
+			.select(group => {
+				let startDate = group.first().date;
+				let endDate = group
+					.last()
+					.date.add(interval[1] || 1, interval[0] || "month");
+				let scaler = annualScale(startDate, endDate);
+				return {
+					startDate,
+					endDate,
+					...fromPairs(
+						this.valueColumns.map(col => [
+							col,
+							(group
+								.deflate(row => row[col])
+								.where(v => v)
+								.sum() *
+								scaler) /
+								normalizeValue
+						])
+					)
+				};
+			})
+			.inflate()
+			.renameSeries({ startDate: "date" })
+			.dropSeries("endDate");
+		return new Timeseries(annual);
 	}
 }
 export default Timeseries;
