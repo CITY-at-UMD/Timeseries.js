@@ -3,7 +3,6 @@ import dayjs from "dayjs";
 const msToInterval = ms => {
 	let start = dayjs();
 	let end = dayjs().add(ms);
-	console.log(end.diff(start, "day"));
 	if (end.diff(start, "month", true) >= 11) {
 		return ["year", Math.ceil(end.diff(start, "year", true))];
 	} else if (end.diff(start, "day", true) >= 28) {

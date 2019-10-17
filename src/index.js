@@ -3,11 +3,13 @@ import dayjs from "dayjs";
 // const isBetween = require('dayjs/plugin/isBetween')
 import { msToInterval } from "./lib/Timeseries.interval";
 import isEqual from "lodash/isEqual";
+import has from "lodash/has";
 import fromPairs from "lodash/fromPairs";
 import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
 import { medianAbsoluteDeviation, quantile } from "simple-statistics";
 
 const annualScale = (start, end) => 365 / dayjs(end).diff(dayjs(start), "day");
+const calculateChange = (baseline, value) => (value - baseline) / baseline;
 
 class Timeseries extends DataFrame {
 	constructor(data = []) {
@@ -405,6 +407,54 @@ class Timeseries extends DataFrame {
 			.renameSeries({ startDate: "date" })
 			.dropSeries("endDate");
 		return new Timeseries(annual);
+	}
+	addBaselineDelta(baselineDF) {
+		// Only Change in Year
+		if (!(baselineDF instanceof Timeseries))
+			baselineDF = new Timeseries(baselineDF);
+		let dfwb;
+		if (baselineDF.count() > 1) {
+			let interval = this.interval;
+			let baselineInterval = baselineDF.interval;
+			if (!isEqual(interval, baselineInterval)) {
+				console.error(interval, baselineInterval);
+				throw new Error("baseline and data intervals do not match");
+			}
+			let indexer;
+			switch (interval[0]) {
+				case "day":
+					indexer = date => `${date.month()}-${date.date()}`;
+					break;
+				case "month":
+					indexer = date => date.month();
+
+					break;
+				default:
+					indexer = date => 0;
+					break;
+			}
+
+			let indexedBaseline = baselineDF.withIndex(row => indexer(row.date));
+			let getBaselineValue = index => {
+				let at = indexedBaseline.at(index);
+				if (at && has(at, "value")) {
+					return at.value;
+				} else {
+					return indexedBaseline.getSeries("value").average();
+				}
+			};
+			dfwb = this.generateSeries({
+				baseline: row => getBaselineValue(indexer(row.date))
+			});
+		} else {
+			dfwb = this.generateSeries({
+				baseline: row => baselineDF.first().value
+			});
+		}
+		dfwb = dfwb.generateSeries({
+			delta: row => calculateChange(row.baseline, row.value)
+		});
+		return new Timeseries(dfwb);
 	}
 }
 export default Timeseries;
