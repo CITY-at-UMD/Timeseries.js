@@ -1,13 +1,17 @@
 import { DataFrame } from "data-forge";
 import dayjs from "dayjs";
 // const isBetween = require('dayjs/plugin/isBetween')
-import { msToInterval } from "./lib/Timeseries.interval";
+import { msToInterval, intervalToMS } from "./lib/Timeseries.interval";
 import isEqual from "lodash/isEqual";
 import has from "lodash/has";
 import fromPairs from "lodash/fromPairs";
 import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
 import { medianAbsoluteDeviation, quantile } from "simple-statistics";
-
+import {
+	rosnerTest,
+	boxPlotTest,
+	modifiedZScoreTest
+} from "./lib/Timeseries.statistics";
 const annualScale = (start, end) => 365 / dayjs(end).diff(dayjs(start), "day");
 const calculateChange = (baseline, value) => (value - baseline) / baseline;
 
@@ -36,9 +40,10 @@ class Timeseries extends DataFrame {
 			.window(2)
 			.select(computeInterval)
 			.detectValues()
-			.orderBy(row => row.Frequency)
+			.orderBy(row => -row.Frequency)
 			.orderBy(row => row.Value);
-		let val = intervals.last().Value;
+		// console.log(intervals.toString());
+		let val = intervals.first().Value;
 		return msToInterval(val);
 	}
 	get valueColumns() {
@@ -60,7 +65,7 @@ class Timeseries extends DataFrame {
 	at(date) {
 		return super.at(dayjs(date));
 	}
-	calculateThresholds({ k, filterZeros = true } = {}) {
+	calculateThresholds({ k, filterZeros = true, filterNegative = true } = {}) {
 		let noflags = this.where(
 			row =>
 				row.flag === null ||
@@ -70,6 +75,7 @@ class Timeseries extends DataFrame {
 			.where(row => !isNaN(row.value) && row.value !== null)
 			.getSeries("value");
 		if (filterZeros) noflags = noflags.where(value => value !== 0);
+		if (filterNegative) noflags = noflags.where(value => value > 0);
 		if (!k) {
 			k =
 				noflags.count() < 1000
@@ -87,9 +93,7 @@ class Timeseries extends DataFrame {
 		filterZeros = false,
 		filterNegative = true
 	} = {}) {
-		let series = this.deflate(row => row[columnName]).where(
-			value => !isNaN(value)
-		);
+		let series = this.deflate(row => row[column]).where(value => !isNaN(value));
 		if (filterNegative) series = series.where(value => value >= 0);
 		if (filterZeros) series = series.where(value => value !== 0);
 		let median = series.median();
@@ -310,11 +314,44 @@ class Timeseries extends DataFrame {
 		let df = this.generateSeries({ value: row => v });
 		return new Timeseries(df);
 	}
-	fill(interval, fillType) {
-		// let interval = this.interval;
-		if (!interval || !Array.isArray(interval)) interval = this.interval;
-		let ndf = this.fillGaps(gapExists(interval), gapFill(fillType, interval));
-		return new Timeseries(ndf);
+	// fill(interval, fillType) {
+	// 	// let interval = this.interval;
+	// 	if (!interval || !Array.isArray(interval)) interval = this.interval;
+	// 	let ndf = this.fillGaps(gapExists(interval), gapFill(fillType, interval));
+	// 	return new Timeseries(ndf);
+	// }
+	fill() {
+		let startDate = this.first().date.toDate(),
+			endDate = this.last().date.toDate();
+		let interval = this.interval;
+		console.time("blank");
+		let bdf = Timeseries.blank(startDate, endDate, interval, "missing");
+		console.timeEnd("blank");
+		console.time("join");
+		let df = this.joinOuterRight(
+			bdf,
+			origional => origional.date.valueOf(),
+			blank => blank.date.valueOf(),
+			(data, fill) => {
+				if (data) {
+					return data;
+				} else {
+					return fill;
+				}
+			}
+		);
+		// let df = this.zip(bdf, (data, fill) => {
+		// 	if (data) {
+		// 		return data;
+		// 	} else {
+		// 		return fill;
+		// 	}
+		// });
+		console.timeEnd("join");
+		console.time("new timeseries");
+		// df = new Timeseries(df);
+		console.timeEnd("new timeseries");
+		return df;
 	}
 	reduceToValue(columnNames) {
 		function chooseValue(row, columnNames = []) {
@@ -328,9 +365,16 @@ class Timeseries extends DataFrame {
 	}
 	clean(columnName = "value", { lowerThreshold, upperThreshold }) {
 		let arr = this.toArray().map(row => {
-			let value = row[columnName];
-			if (value > upperThreshold || value < lowerThreshold) {
-				return { ...row, value: undefined, raw: value };
+			if (row.value > upperThreshold || row.value < lowerThreshold) {
+				let { value, flag = [], ...others } = row;
+				if (!flag) flag = [];
+				if (!Array.isArray(flag)) flag = [flag];
+				return {
+					value: undefined,
+					raw: value,
+					flag: ["outlier", ...flag],
+					...others
+				};
 			} else {
 				return row;
 			}
@@ -338,17 +382,30 @@ class Timeseries extends DataFrame {
 		return new Timeseries(arr);
 	}
 	// Static Methods
-	static blank(startDate, endDate, [duration, value = 1]) {
+	static blank(startDate, endDate, [duration, value = 1], flag) {
 		if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
 			console.error(interval);
 			throw new Error("interval type not supported");
 		}
-		let df = new Timeseries([
-			{ date: dayjs(startDate) },
-			{ date: dayjs(endDate) }
-		])
-			.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
-			.between(startDate, endDate);
+		startDate = dayjs(startDate);
+		endDate = dayjs(endDate);
+		let dates = [startDate];
+		let interval = intervalToMS([duration, value]);
+		while (dates[dates.length - 1].valueOf() < endDate.valueOf()) {
+			dates.push(dayjs(dates[dates.length - 1]).add(value, duration));
+		}
+		let df = new Timeseries(dates.map(date => ({ date })));
+		// let df = new Timeseries([
+		// 	{ date: dayjs(startDate) },
+		// 	{ date: dayjs(endDate) }
+		// ])
+		// 	.fillGaps(gapExists([duration, value]), gapFillBlank([duration, value]))
+		// 	.between(startDate, endDate);
+		console.log(df.count());
+		if (flag)
+			df = df.generateSeries({
+				flag: row => [flag]
+			});
 		return new Timeseries(df);
 	}
 	static aggregate(dataframes) {

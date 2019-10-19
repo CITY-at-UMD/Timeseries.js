@@ -15,7 +15,11 @@ const msToInterval = ms => {
 		return ["minute", end.diff(start, "minute")];
 	}
 };
-
+const intervalToMS = ([unit, value]) => {
+	let start = dayjs();
+	let end = dayjs().add(value, unit);
+	return end.diff(start);
+};
 function calculateInterval(df, startDate, endDate) {
 	if (!startDate) startDate = df.first.date;
 	if (!endDate) endDate = df.last.date;
@@ -33,4 +37,4 @@ function calculateInterval(df, startDate, endDate) {
 	let val = intervals.last().Value;
 	return msToInterval(val);
 }
-export { msToInterval, calculateInterval };
+export { msToInterval, intervalToMS, calculateInterval };
