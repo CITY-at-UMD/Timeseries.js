@@ -53,10 +53,11 @@ let data = new Array(4 * 24 * 365 * 10).fill(0).map((v, i) => ({
 	value: 100
 }));
 
-let df = new Timeseries(data).where(row => row.date.minute() !== 15);
+let df = new Timeseries(data)
+	.setDateIndex()
+	.where(row => row.date.minute() !== 15);
 // console.log(df.toString());
 console.time("create");
-df = new Timeseries(df);
 console.timeEnd("create");
 console.time("fill");
 df = df.fill();

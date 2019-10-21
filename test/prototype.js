@@ -20,16 +20,21 @@ function interval() {
 	return val;
 }
 
-function setDateIndex() {
-	if (this.getColumnNames().indexOf("date") === -1)
+function setDateIndex(col = "date") {
+	if (this.getColumnNames().indexOf(col) === -1)
 		throw new Error("No Date Column in DataFrame");
-	return this.orderBy(row => row.date.valueOf()).withIndex(row =>
-		row.date.toDate()
+	return this.orderBy(row => row[col].valueOf()).withIndex(row =>
+		dayjs(row.date).toDate()
 	);
+}
+
+function blank(start, end) {
+	return new Timeseries([{ date: start }, { date: end }]);
 }
 
 Timeseries.prototype.interval = interval;
 Timeseries.prototype.setDateIndex = setDateIndex;
+Timeseries.blank = blank;
 
 // Test
 let data = new Array(4 * 24 * 10).fill(0).map((v, i) => ({
@@ -39,5 +44,8 @@ let data = new Array(4 * 24 * 10).fill(0).map((v, i) => ({
 	value: 100
 }));
 let df = new Timeseries(data).setDateIndex();
-// console.log(df.toString());
+console.log(df.toString());
 console.log(df.interval());
+
+let bl = Timeseries.blank(new Date(20), new Date());
+console.log(bl.toString());
