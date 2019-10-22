@@ -135,7 +135,14 @@ function test() {
 			.subtract(15 * i, "minute"),
 		value: 100 * Math.random() - 20
 	}));
-
+	let df1 = new Timeseries(
+		new Array(4 * 24 * 365 * 0.1).fill(0).map((v, i) => ({
+			date: dayjs(new Date(2020, 4))
+				.startOf("hour")
+				.subtract(15 * i, "minute"),
+			value: 100 * Math.random() - 20
+		}))
+	);
 	let df = new Timeseries(data);
 	// df = df.where(row => row.date.minute() !== 15);
 
@@ -143,6 +150,7 @@ function test() {
 
 	let agg = Timeseries.aggregate(df, df);
 	console.log(agg.toString());
-
+	let conc = Timeseries.concat([df, df1]);
+	console.log(conc.toString());
 }
 test();

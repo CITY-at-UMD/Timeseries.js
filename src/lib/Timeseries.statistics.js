@@ -13,6 +13,7 @@ import {
 } from "simple-statistics";
 import { Studentt } from "distributions";
 import dayjs from "dayjs";
+
 function rval(df) {
   let values = df.deflate(row => row.x).toArray();
   let std = sampleStandardDeviation(values);

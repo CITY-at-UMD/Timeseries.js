@@ -13,6 +13,7 @@ import {
 } from "./lib/Timeseries.statistics";
 import { annualScale, calculateChange } from "./lib/misc";
 import { zeroCheck } from "./lib/Timeseries.zero";
+import { timingSafeEqual } from "crypto";
 
 export default Timeseries;
 
@@ -437,9 +438,7 @@ Timeseries.prototype.fillNull = fillNull;
 function zeroReplacement(threshold) {
 	let df = this;
 	let { zeroGroups } = zeroCheck(df, threshold);
-	console.log("zeroGroups", zeroGroups.count());
 	let dfs = zeroGroups.toArray().map((zdf, i) => {
-		console.log((i / zeroGroups.count()) * 100);
 		zdf = zdf
 			.transformSeries({
 				value: () => null,
@@ -510,7 +509,6 @@ function threeYearAverage(date, column = "value", defaultValue) {
 			.getSeries(column)
 			.where(v => !isNaN(v) && v !== null)
 			.average();
-		if (isNaN(val)) console.log(months.toString());
 		return val;
 	} else {
 		return defaultValue;
@@ -570,7 +568,6 @@ function aggregate(dataframes) {
 	const valueColumns = new Set(
 		dataframes.map(df => df.getValueColumns()).reduce((a, b) => a.concat(b), [])
 	);
-	console.log(valueColumns);
 	const concatenated = dataForge.DataFrame.concat(dataframes)
 		.groupBy(row => row.date)
 		.select(group => {
@@ -594,7 +591,19 @@ function aggregate(dataframes) {
 		})
 		.inflate();
 	// .toArray();
-	console.log(concatenated.toString());
+
 	return new Timeseries(concatenated);
 }
 Timeseries.aggregate = aggregate;
+Timeseries.concat = dataframes => {
+	if (!Array.isArray(dataframes)) dataframes = [dataframes];
+	dataframes = dataframes.map(df => new Timeseries(df));
+	let df = dataForge.DataFrame.concat(dataframes);
+	return new Timeseries(df);
+};
+Timeseries.merge = dataframes => {
+	if (!Array.isArray(dataframes)) dataframes = [dataframes];
+	dataframes = dataframes.map(df => new Timeseries(df));
+	let df = dataForge.DataFrame.merge(dataframes);
+	return new Timeseries(df);
+};
