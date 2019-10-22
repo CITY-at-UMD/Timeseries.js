@@ -127,7 +127,7 @@ async function testFull(filename) {
 	plt.show();
 	console.log("done");
 }
-testFull("../data/225A01ME.csv");
+// testFull("../data/225A01ME.csv");
 function test() {
 	let data = new Array(4 * 24 * 365 * 0.1).fill(0).map((v, i) => ({
 		date: dayjs()
@@ -139,24 +139,10 @@ function test() {
 	let df = new Timeseries(data);
 	// df = df.where(row => row.date.minute() !== 15);
 
-	console.log(df.toString());
-	console.log(typeof df);
-	console.log(df instanceof Timeseries);
-	console.log(df instanceof dataForge.DataFrame);
 	let clean = df.removeOutliers({ lowerThreshold: 0, upperThreshold: 50 });
-	console.log("clean");
-	console.log(clean.head(10).toString());
 
-	// let comb = Timeseries.aggregate([
-	// 	df,
-	// 	df.where(row => row.date.minute() !== 15)
-	// ]).downsample(["month", 1], "sum");
-	// console.log(comb.toString());
-	// console.time("create");
-	// console.timeEnd("create");
-	// console.time("fill");
-	// df = df.fill();
-	// console.timeEnd("fill");
-	// // console.log(df.toString());
-	// console.log("done");
+	let agg = Timeseries.aggregate(df, df);
+	console.log(agg.toString());
+
 }
+test();

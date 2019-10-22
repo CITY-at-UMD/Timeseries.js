@@ -570,7 +570,7 @@ function aggregate(dataframes) {
 	const valueColumns = new Set(
 		dataframes.map(df => df.getValueColumns()).reduce((a, b) => a.concat(b), [])
 	);
-
+	console.log(valueColumns);
 	const concatenated = dataForge.DataFrame.concat(dataframes)
 		.groupBy(row => row.date)
 		.select(group => {
@@ -580,7 +580,7 @@ function aggregate(dataframes) {
 			group
 				.getColumnNames()
 				.filter(col => col !== "date")
-				.filter(col => valueColumns.indexOf(col) === -1)
+				.filter(col => valueColumns.has(col) === -1)
 				.forEach(col => {
 					let value = group
 						.deflate(row => row[col])
@@ -594,6 +594,7 @@ function aggregate(dataframes) {
 		})
 		.inflate();
 	// .toArray();
+	console.log(concatenated.toString());
 	return new Timeseries(concatenated);
 }
 Timeseries.aggregate = aggregate;
