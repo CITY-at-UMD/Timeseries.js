@@ -12,19 +12,43 @@ import {
 	modifiedZScoreTest
 } from "./lib/Timeseries.statistics";
 import { annualScale, calculateChange } from "./lib/misc";
+import { zeroCheck } from "./lib/Timeseries.zero";
 
-const Timeseries = dataForge.DataFrame;
+export default Timeseries;
 
-function setDateIndex(col = "date") {
-	if (this.getColumnNames().indexOf(col) === -1)
-		throw new Error("No Date Column in DataFrame");
-	return this.orderBy(row => row[col].valueOf()).withIndex(row =>
-		dayjs(row.date).toDate()
-	);
+function Timeseries(data) {
+	if (data instanceof Timeseries) {
+		return data;
+	}
+	if (data instanceof dataForge.DataFrame) {
+		data = data.toArray();
+	}
+
+	data = data
+		.map(({ date, ...others }) => ({ date: dayjs(date), ...others }))
+		.sort((a, b) => a.date.valueOf() - b.date.valueOf());
+	let config = {
+		// columns: ['date', 'value', 'raw', 'flag'],
+		values: data,
+		index: data.map(({ date }) => date.toDate()),
+		considerAllRows: true
+	};
+	dataForge.DataFrame.call(this, config);
+}
+
+Timeseries.prototype = Object.create(dataForge.DataFrame.prototype);
+Timeseries.prototype.constructor = Timeseries;
+
+// Getters
+function getValueColumns() {
+	return this.detectTypes()
+		.where(row => row.Type === "number")
+		.distinct(row => row.Column)
+		.getSeries("Column")
+		.toArray();
 }
 function interval() {
 	const computeInterval = window => window.last() - window.first();
-
 	const intervals = this.getIndex()
 		.window(2)
 		.select(computeInterval)
@@ -33,14 +57,6 @@ function interval() {
 		.orderBy(row => row.Value);
 	let val = intervals.first().Value;
 	return msToInterval(val);
-}
-
-function getValueColumns() {
-	return this.detectTypes()
-		.where(row => row.Type === "number")
-		.distinct(row => row.Column)
-		.getSeries("Column")
-		.toArray();
 }
 
 function dateRange(unit, adjustment) {
@@ -52,7 +68,11 @@ function dateRange(unit, adjustment) {
 	}
 	return end.diff(start, unit);
 }
+Timeseries.prototype.getValueColumns = getValueColumns;
+Timeseries.prototype.getInterval = interval;
+Timeseries.prototype.getDateRange = dateRange;
 
+// Methods
 function calculateThresholdOptions({
 	k,
 	filterZeros = true,
@@ -80,7 +100,7 @@ function calculateThresholdOptions({
 	let { thresholds: modz } = modifiedZScoreTest(noflags.toArray());
 	return { esd, box, modz };
 }
-function claculateStatistics(options = {}) {
+function calculateStatistics(options = {}) {
 	const {
 		column = "value",
 		filterZeros = false,
@@ -113,6 +133,11 @@ function claculateStatistics(options = {}) {
 	};
 	return stats;
 }
+
+Timeseries.prototype.calculateStatistics = calculateStatistics;
+Timeseries.prototype.calculateThresholdOptions = calculateThresholdOptions;
+
+// Chainable Methods
 function transformAllSeries(adjustmentFunction, { exclude }) {
 	let df = this;
 	let columns = (columns = df
@@ -138,6 +163,31 @@ function transformAllSeries(adjustmentFunction, { exclude }) {
 	return df;
 }
 
+Timeseries.prototype.transformAllSeries = transformAllSeries;
+
+function reset() {
+	let df = this.withSeries({
+		value: row =>
+			row.flag && Array.isArray(row.flag) && row.flag.length > 0
+				? row.raw
+				: row.value
+	})
+		.subset(["date", "value"])
+		.where(row => !isNaN(row.value) && row.value !== null);
+	return new Timeseries(df);
+}
+Timeseries.prototype.reset = reset;
+
+function group(interval, toArray) {
+	if (["hour", "day", "month", "year"].indexOf(interval) === -1)
+		throw new Error("interval type not supported");
+	let dateComparison = row => dayjs(row.date).startOf(interval);
+	let groups = this.groupBy(dateComparison);
+	return groups;
+}
+
+Timeseries.prototype.group = group;
+
 function removeOutliers({
 	column = "value",
 	lowerThreshold,
@@ -146,40 +196,29 @@ function removeOutliers({
 	if (lowerThreshold > upperThreshold) throw new Error("thresholds invalid");
 	let outlierCheck = (value, lowerThreshold, upperThreshold) =>
 		value < lowerThreshold || value > upperThreshold;
-	let outliers = this.where(row => outlierCheck(row.value))
+
+	let outliers = this.where(row =>
+		outlierCheck(row[column], lowerThreshold, upperThreshold)
+	)
 		.generateSeries({
-			raw: row => row.value,
+			raw: row => row[column],
 			flag: ({ flag = [] }) => ["outlier", ...flag]
 		})
 		.transformSeries({
-			value: row => null
+			[column]: row => null
 		});
-	let df = this.merge(outliers);
-	return df;
+	// let df = this.withSeries("raw", outliers.getSeries("raw")).withSeries(
+	// 	"flag",
+	// 	outliers.getSeries("flag")
+	// );
+
+	let merged = this.merge(outliers);
+	return new Timeseries(merged.toArray());
 }
-function reset() {
-	return this.withSeries({
-		value: row =>
-			row.flag && Array.isArray(row.flag) && row.flag.length > 0
-				? row.raw
-				: row.value
-	}).dropSeries(["flag", "raw"]);
-}
-function group(interval, toArray) {
-	if (["hour", "day", "month", "year"].indexOf(interval) === -1)
-		throw new Error("interval type not supported");
-	let dateComparison = row => dayjs(row.date).startOf(interval);
-	let groups = this.groupBy(dateComparison);
-	return groups;
-}
-function upsample([duration, value], fillType = "avg") {
-	// Dont use this b/c it has the raw and flag values
-	let df = this.fillGaps(
-		gapExists([duration, value]),
-		gapFill(fillType, [duration, value])
-	);
-	return df;
-}
+
+Timeseries.prototype.removeOutliers = removeOutliers;
+Timeseries.prototype.clean = removeOutliers;
+
 function downsample([duration, value], fillType = "sum") {
 	if (["hour", "day", "month", "year"].indexOf(duration) === -1)
 		throw new Error("interval type not supported");
@@ -203,20 +242,20 @@ function downsample([duration, value], fillType = "sum") {
 							case "median":
 								value = group
 									.deflate(row => row[col])
-									.where(v => v)
+									.where(v => !isNaN(v) && v !== null)
 									.median();
 								break;
 							case "avg":
 								value = group
 									.deflate(row => row[col])
-									.where(v => v)
+									.where(v => !isNaN(v) && v !== null)
 									.average();
 								break;
 							default:
 								// sum
 								value = group
 									.deflate(row => row[col])
-									.where(v => v)
+									.where(v => !isNaN(v) && v !== null)
 									.sum();
 								break;
 						}
@@ -239,8 +278,22 @@ function downsample([duration, value], fillType = "sum") {
 		})
 		.inflate()
 		.withIndex(row => dayjs(row.date).toDate());
-	return df;
+	return new Timeseries(df);
 }
+
+Timeseries.prototype.downsample = downsample;
+
+function upsample([duration, value], fillType = "avg") {
+	// Dont use this b/c it has the raw and flag values
+	let df = this.fillGaps(
+		gapExists([duration, value]),
+		gapFill(fillType, [duration, value])
+	);
+	return new Timeseries(df);
+}
+
+Timeseries.prototype.upsample = upsample;
+
 function populate(value, type = "avg") {
 	let v;
 	switch (type) {
@@ -252,27 +305,11 @@ function populate(value, type = "avg") {
 			break;
 	}
 	let df = this.generateSeries({ value: row => v });
-	return df;
+	return new Timeseries(df);
 }
-function fill() {
-	let startDate = this.first().date.toDate(),
-		endDate = this.last().date.toDate();
-	let interval = this.getInterval();
-	let bdf = Timeseries.blank(startDate, endDate, interval, "missing");
-	let df = this.joinOuterRight(
-		bdf,
-		origional => origional.date.valueOf(),
-		blank => blank.date.valueOf(),
-		(data, fill) => {
-			if (data) {
-				return data;
-			} else {
-				return fill;
-			}
-		}
-	);
-	return df;
-}
+
+Timeseries.prototype.populate = populate;
+
 function reduceToValue(columnNames) {
 	function chooseValue(row, columnNames = []) {
 		let values = columnNames.map(n => row[n]).filter(v => v);
@@ -281,13 +318,17 @@ function reduceToValue(columnNames) {
 	let df = this.generateSeries({
 		value: row => chooseValue(row, columnNames)
 	}).subset(["date", "value"]);
-	return df;
+	return new Timeseries(df);
 }
-// Specific Functions
+
+Timeseries.prototype.reduceToValue = reduceToValue;
+
+// Baseline Functions
+
 function addBaselineDelta(baselineDF) {
 	// Only Change in Year
 	if (!(baselineDF instanceof Timeseries))
-		baselineDF = new Timeseries(baselineDF).setDateIndex();
+		baselineDF = new Timeseries(baselineDF);
 	let dfwb;
 	if (baselineDF.count() > 1) {
 		let interval = this.getInterval();
@@ -330,13 +371,11 @@ function addBaselineDelta(baselineDF) {
 	dfwb = dfwb.generateSeries({
 		delta: row => calculateChange(row.baseline, row.value)
 	});
-	return dfwb;
+	return new Timeseries(dfwb);
 }
-function annualMonthlyAverage({ startDate, endDate }) {
-	let months = this.downsample(["month", 1], "sum").between(startDate, endDate);
-	let avg = months.getSeries("value").average();
-}
-// Building Functions
+
+Timeseries.prototype.addBaselineDelta = addBaselineDelta;
+
 function annualIntensity(normalizeValue = 1) {
 	let interval = this.getInterval();
 	let annual = this.groupBy(row => row.date.year())
@@ -365,8 +404,143 @@ function annualIntensity(normalizeValue = 1) {
 		.inflate()
 		.renameSeries({ startDate: "date" })
 		.dropSeries("endDate");
-	return annual;
+	return new Timeseries(annual);
 }
+
+Timeseries.prototype.annualIntensity = annualIntensity;
+
+// Fill Functions
+
+function fillMissing() {
+	let startDate = this.first().date.toDate(),
+		endDate = this.last().date.toDate();
+	let interval = this.getInterval();
+	let bdf = Timeseries.blank(startDate, endDate, interval, "missing").withIndex(
+		row => row.date.valueOf()
+	);
+	let m = this.withIndex(row => row.date.valueOf())
+		.merge(bdf)
+		.transformSeries({
+			flag: row => (row.value ? undefined : row.flag)
+		});
+	return new Timeseries(m);
+}
+Timeseries.prototype.fillMissing = fillMissing;
+function fillNull(v) {
+	let df = this.transformSeries({
+		value: value => (value === null || value === undefined ? v : value)
+	});
+	return new Timeseries(df);
+}
+Timeseries.prototype.fillNull = fillNull;
+
+function zeroReplacement(threshold) {
+	let df = this;
+	let { zeroGroups } = zeroCheck(df, threshold);
+	console.log("zeroGroups", zeroGroups.count());
+	let dfs = zeroGroups.toArray().map((zdf, i) => {
+		console.log((i / zeroGroups.count()) * 100);
+		zdf = zdf
+			.transformSeries({
+				value: () => null,
+				raw: () => 0,
+				flag: value => ["zero", ...(value || [])]
+			})
+			.withIndex(row => new Date(row.date).valueOf());
+		return zdf;
+	});
+	let merged = df.withIndex(row => row.date.valueOf()).merge(...dfs);
+	return new Timeseries(merged);
+}
+Timeseries.prototype.zeroReplacement = zeroReplacement;
+
+function monthlyWithQual() {
+	let duration = "month";
+	let dateComparison = row =>
+		dayjs(row.date)
+			.startOf(duration)
+			.valueOf();
+	let ts = this.groupBy(dateComparison)
+		.select(group => {
+			const date = dayjs(group.first().date)
+				.startOf(duration)
+				.toDate();
+			let days = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+			let count = group
+				.getSeries("value")
+				.where(v => v && v !== 0)
+				.toArray().length;
+			let value = group
+				.getSeries("value")
+				.where(v => !isNaN(v))
+				.sum();
+			return {
+				date,
+				value: isNaN(value) ? 0 : value,
+				count,
+				days,
+				score: count / days
+			};
+		})
+		.inflate()
+		.withIndex(row => row.date.toDate());
+	return new Timeseries(ts);
+}
+Timeseries.prototype.monthlyWithQual = monthlyWithQual;
+
+function threeYearAverage(date, column = "value", defaultValue) {
+	date = dayjs(date);
+	if (!defaultValue)
+		defaultValue = this.getSeries("value")
+			.where(v => !isNaN(v) && v !== null)
+			.average();
+
+	// let months = df
+	// 	.before(date.valueOf())
+	// 	.where(row => dayjs(row.date).month() === date.month())
+	// 	.where(row => row.score > 0.9)
+	// 	.tail(3);
+	let months = this.before(date.toDate())
+		.where(row => row.date.month() === date.month())
+		.orderBy(row => dayjs(row.date))
+		.tail(3);
+	// .where(row => row.score > 0.9);
+	if (months.count() > 0) {
+		let val = months
+			.getSeries(column)
+			.where(v => !isNaN(v) && v !== null)
+			.average();
+		if (isNaN(val)) console.log(months.toString());
+		return val;
+	} else {
+		return defaultValue;
+	}
+}
+Timeseries.prototype.threeYearAverage = threeYearAverage;
+
+function averageFill() {
+	let df = this;
+	let avg = df
+		// .where(row => row.score ?row.score >= 0.9)
+		.getSeries("value")
+		.where(v => !isNaN(v) && v !== null)
+		.average();
+	let monthlyAvg = df
+		.generateSeries({
+			rollingAverage: row => df.threeYearAverage(row.date, "value", avg)
+		})
+		.generateSeries({
+			flag: row => (row.value ? row.flag : ["filled", ...(row.flag || [])])
+		})
+		.generateSeries({
+			value: row => (row.value ? row.value : row.rollingAverage)
+		})
+		.dropSeries(["rollingAverage"]);
+	return new Timeseries(monthlyAvg);
+}
+
+Timeseries.prototype.averageFill = averageFill;
+
 // Static Methods
 function blank(startDate, endDate, [duration, value = 1], flag) {
 	if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
@@ -380,16 +554,19 @@ function blank(startDate, endDate, [duration, value = 1], flag) {
 	while (dates[dates.length - 1].valueOf() < endDate.valueOf()) {
 		dates.push(dayjs(dates[dates.length - 1]).add(value, duration));
 	}
-	let df = new Timeseries(dates.map(date => ({ date }))).setDateIndex();
-	if (flag)
-		df = df.generateSeries({
-			flag: row => [flag]
-		});
+	let df = new Timeseries(dates.map(date => ({ date, ...(flag && { flag }) })));
+	// if (flag) {
+	// 	df = df.generateSeries({
+	// 		flag: row => [flag]
+	// 	});
+	// 	df = new Timeseries(df);
+	// }
 	return df;
 }
+Timeseries.blank = blank;
 function aggregate(dataframes) {
 	if (!Array.isArray(dataframes)) dataframes = [dataframes];
-	dataframes = dataframes.map(df => new Timeseries(df).setDateIndex());
+	dataframes = dataframes.map(df => new Timeseries(df));
 	const valueColumns = new Set(
 		dataframes.map(df => df.getValueColumns()).reduce((a, b) => a.concat(b), [])
 	);
@@ -400,32 +577,23 @@ function aggregate(dataframes) {
 			const date = group.first().date;
 			let o = { date };
 			valueColumns.forEach(c => (o[c] = group.deflate(row => row[c]).sum()));
+			group
+				.getColumnNames()
+				.filter(col => col !== "date")
+				.filter(col => valueColumns.indexOf(col) === -1)
+				.forEach(col => {
+					let value = group
+						.deflate(row => row[col])
+						.distinct()
+						.toArray();
+					if (value.length === 1) value = value[0];
+					o[col] = value;
+					return;
+				});
 			return o;
 		})
 		.inflate();
 	// .toArray();
-	return new Timeseries(concatenated).setDateIndex();
-	// return concatenated;
+	return new Timeseries(concatenated);
 }
-Timeseries.prototype.setDateIndex = setDateIndex;
-Timeseries.prototype.getInterval = interval;
-Timeseries.prototype.getValueColumns = getValueColumns;
-Timeseries.prototype.getDateRange = dateRange;
-Timeseries.prototype.calculateThresholdOptions = calculateThresholdOptions;
-Timeseries.prototype.claculateStatistics = claculateStatistics;
-Timeseries.prototype.transformAllSeries = transformAllSeries;
-Timeseries.prototype.removeOutliers = removeOutliers;
-Timeseries.prototype.clean = removeOutliers;
-Timeseries.prototype.group = group;
-Timeseries.prototype.downsample = downsample;
-Timeseries.prototype.upsample = upsample;
-Timeseries.prototype.populateSeries = populate;
-Timeseries.prototype.fill = fill;
-Timeseries.prototype.reduceToValue = reduceToValue;
-Timeseries.prototype.annualIntensity = annualIntensity;
-Timeseries.prototype.addBaselineDelta = addBaselineDelta;
-
-Timeseries.blank = blank;
 Timeseries.aggregate = aggregate;
-
-export default Timeseries;
