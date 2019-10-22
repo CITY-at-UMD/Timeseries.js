@@ -129,7 +129,7 @@ async function testFull(filename) {
 }
 // testFull("../data/225A01ME.csv");
 function test() {
-	let data = new Array(4 * 24 * 365 * 0.1).fill(0).map((v, i) => ({
+	let data = new Array(4 * 24 * 365 * 3).fill(0).map((v, i) => ({
 		date: dayjs()
 			.startOf("hour")
 			.subtract(15 * i, "minute"),
@@ -147,10 +147,6 @@ function test() {
 	// df = df.where(row => row.date.minute() !== 15);
 
 	let clean = df.removeOutliers({ lowerThreshold: 0, upperThreshold: 50 });
-
-	let agg = Timeseries.aggregate(df, df);
-	console.log(agg.toString());
-	let conc = Timeseries.concat([df, df1]);
-	console.log(conc.toString());
+	console.log(clean.annualIntensity(100).toString());
 }
 test();
