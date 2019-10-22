@@ -53,14 +53,18 @@ let data = new Array(4 * 24 * 365 * 10).fill(0).map((v, i) => ({
 	value: 100
 }));
 
-let df = new Timeseries(data)
-	.setDateIndex()
-	.where(row => row.date.minute() !== 15);
+let df = new Timeseries(data).setDateIndex();
+// .where(row => row.date.minute() !== 15);
 // console.log(df.toString());
-console.time("create");
-console.timeEnd("create");
-console.time("fill");
-df = df.fill();
-console.timeEnd("fill");
-// console.log(df.toString());
-console.log("done");
+let comb = Timeseries.aggregate([
+	df,
+	df.where(row => row.date.minute() !== 15)
+]).downsample(["month", 1], "sum");
+console.log(comb.toString());
+// console.time("create");
+// console.timeEnd("create");
+// console.time("fill");
+// df = df.fill();
+// console.timeEnd("fill");
+// // console.log(df.toString());
+// console.log("done");

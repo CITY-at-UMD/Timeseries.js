@@ -187,7 +187,7 @@ function downsample([duration, value], fillType = "sum") {
 		throw new Error("aggregation type not suppported, only:");
 	}
 	let dateComparison = row => row.date.startOf(duration);
-	let valueColumns = this.valueColumns;
+	let valueColumns = this.getValueColumns();
 	if (value) {
 		dateComparison = row => row.date.startOf(duration).add(value, duration);
 	}
@@ -350,7 +350,7 @@ function annualIntensity(normalizeValue = 1) {
 				startDate,
 				endDate,
 				...fromPairs(
-					this.valueColumns.map(col => [
+					this.getValueColumns().map(col => [
 						col,
 						(group
 							.deflate(row => row[col])
@@ -390,13 +390,10 @@ function blank(startDate, endDate, [duration, value = 1], flag) {
 function aggregate(dataframes) {
 	if (!Array.isArray(dataframes)) dataframes = [dataframes];
 	dataframes = dataframes.map(df => new Timeseries(df).setDateIndex());
-	const valueColumns = [
-		...new Set(
-			dataframes
-				.map(df => df.getValueColumns())
-				.reduce((a, b) => a.concat(b), [])
-		)
-	];
+	const valueColumns = new Set(
+		dataframes.map(df => df.getValueColumns()).reduce((a, b) => a.concat(b), [])
+	);
+
 	const concatenated = dataForge.DataFrame.concat(dataframes)
 		.groupBy(row => row.date)
 		.select(group => {
@@ -405,9 +402,10 @@ function aggregate(dataframes) {
 			valueColumns.forEach(c => (o[c] = group.deflate(row => row[c]).sum()));
 			return o;
 		})
-		.inflate()
-		.toArray();
-	return new Timeseries(concatenated.toArray()).setDateIndex();
+		.inflate();
+	// .toArray();
+	return new Timeseries(concatenated).setDateIndex();
+	// return concatenated;
 }
 Timeseries.prototype.setDateIndex = setDateIndex;
 Timeseries.prototype.getInterval = interval;
