@@ -54,9 +54,11 @@ function interval() {
 		.window(2)
 		.select(computeInterval)
 		.detectValues()
-		.orderBy(row => -row.Frequency)
-		.orderBy(row => row.Value);
+		.orderBy(row => -row.Frequency);
+	// .orderBy(row => row.Value);
+
 	let val = intervals.first().Value;
+
 	return msToInterval(val);
 }
 
@@ -419,12 +421,12 @@ function fillMissing() {
 	let bdf = Timeseries.blank(startDate, endDate, interval, "missing").withIndex(
 		row => row.date.valueOf()
 	);
-	let m = this.withIndex(row => row.date.valueOf())
-		.merge(bdf)
-		.transformSeries({
-			flag: row => (row.value ? undefined : row.flag)
-		});
-	return new Timeseries(m);
+	let m = this.withIndex(row => row.date.valueOf()).merge(bdf);
+	m = m.transformSeries({
+		flag: row => (row.value ? undefined : row.flag)
+	});
+	m = new Timeseries(m);
+	return m;
 }
 Timeseries.prototype.fillMissing = fillMissing;
 function fillNull(v) {
@@ -454,16 +456,23 @@ function zeroReplacement(threshold) {
 Timeseries.prototype.zeroReplacement = zeroReplacement;
 
 function monthlyWithQual() {
-	let duration = "month";
+	let interval = this.getInterval();
+	let ms = intervalToMS(interval);
+	const duration = "month";
 	let dateComparison = row =>
 		dayjs(row.date)
-			.startOf(duration)
+			.startOf()
 			.valueOf();
 	let ts = this.groupBy(dateComparison)
 		.select(group => {
 			const date = dayjs(group.first().date)
 				.startOf(duration)
 				.toDate();
+			let fullCount = Math.floor(
+				dayjs(date)
+					.endOf("month")
+					.diff(dayjs(date), "millisecond") / ms
+			);
 			let days = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 			let count = group
 				.getSeries("value")
@@ -477,8 +486,8 @@ function monthlyWithQual() {
 				date,
 				value: isNaN(value) ? 0 : value,
 				count,
-				days,
-				score: count / days
+				fullCount,
+				score: count / fullCount
 			};
 		})
 		.inflate()

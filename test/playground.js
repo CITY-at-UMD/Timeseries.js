@@ -1,12 +1,11 @@
 const dataForge = require("data-forge");
-// require("../dist/index");
+require("data-forge-fs");
 const Timeseries = require("../dist/index");
 const dayjs = require("dayjs");
 const plt = require("matplotnode");
-const { ckmeans, mean } = require("simple-statistics");
-require("data-forge-fs");
+const { ckmeans, mean, max, min } = require("simple-statistics");
 var readline = require("readline-promise").default;
-
+const get = require("lodash/get");
 async function testFull(filename) {
 	const rlp = readline.createInterface({
 		input: process.stdin,
@@ -128,25 +127,114 @@ async function testFull(filename) {
 	console.log("done");
 }
 // testFull("../data/225A01ME.csv");
-function test() {
-	let data = new Array(4 * 24 * 365 * 3).fill(0).map((v, i) => ({
-		date: dayjs()
-			.startOf("hour")
-			.subtract(15 * i, "minute"),
-		value: 100 * Math.random() - 20
-	}));
-	let df1 = new Timeseries(
-		new Array(4 * 24 * 365 * 0.1).fill(0).map((v, i) => ({
-			date: dayjs(new Date(2020, 4))
-				.startOf("hour")
-				.subtract(15 * i, "minute"),
-			value: 100 * Math.random() - 20
-		}))
-	);
-	let df = new Timeseries(data);
-	// df = df.where(row => row.date.minute() !== 15);
+async function testFill(meter, plot) {
+	let consumptionReport = await dataForge
+		.readFile(`../data/parsedConsumtionReportElectricity.csv`)
+		.parseCSV();
 
-	let clean = df.removeOutliers({ lowerThreshold: 0, upperThreshold: 50 });
-	console.log(clean.annualIntensity(100).toString());
+	// console.log(consumptionReport.head(10).toString());
+	consumptionReport = consumptionReport
+		.subset(["date", meter])
+		.parseDates(["date"])
+		.parseFloats([meter])
+		.renameSeries({
+			[meter]: "value"
+		});
+	let consumptionDF = new Timeseries(consumptionReport);
+	// console.log(consumptionDF.toString());
+	let rawData = await dataForge.readFile(`../data/${meter}.csv`).parseCSV();
+	rawData = rawData.parseDates("date").parseFloats("value");
+	let meterDataDF = new Timeseries(rawData); //.downsample(["month", 1], "sum");
+
+	let thresholds = meterDataDF.calculateThresholdOptions();
+
+	const thresholdGroups = ckmeans(
+		[
+			get(thresholds, "esd.upper", null),
+			get(thresholds, "modz.upper", null),
+			get(thresholds, "box.lowerOuter", null),
+			get(thresholds, "box.upperOuter", null)
+		].filter(v => v),
+		2
+	);
+
+	let threshold_actual = max(
+		thresholdGroups.reduce((a, b) => (a.length > b.length ? a : b))
+	);
+	let cleaned = meterDataDF
+		.clean({
+			lowerThreshold: 0,
+			upperThreshold: threshold_actual
+		})
+		.fillMissing()
+		.monthlyWithQual()
+		.generateSeries({
+			value: row => (row.score > 0.9 ? row.value : null)
+		});
+
+	let meterFill = new Timeseries(cleaned).averageFill();
+	// console.log(meterFill.toString());
+	let compareRange = {
+		start: dayjs(
+			max([
+				meterFill.first().date.valueOf(),
+				consumptionDF.first().date.valueOf()
+			])
+		).toDate(),
+		end: dayjs(
+			min([
+				meterFill.last().date.valueOf(),
+				consumptionDF.last().date.valueOf()
+			])
+		).toDate()
+	};
+	// console.log(compareRange);
+	let compareDF = meterFill
+		.renameSeries({ value: "meter" })
+		.withIndex(row => row.date.valueOf())
+		.merge(
+			consumptionDF
+				.renameSeries({ value: "consumption" })
+				.withIndex(row => row.date.valueOf()),
+			new Timeseries(rawData)
+				.downsample(["month", 1])
+				.renameSeries({ value: "raw" })
+				.withIndex(row => row.date.valueOf())
+		)
+		.between(compareRange.start, compareRange.end);
+	console.log(compareDF.toString());
+	if (plot) {
+		plt.plot(
+			compareDF
+				.getSeries("date")
+				.toArray()
+				.map(d => d.valueOf()),
+			compareDF.getSeries("consumption").toArray(),
+			"color=b",
+			"label=consumption"
+		);
+
+		plt.plot(
+			compareDF
+				.getSeries("date")
+				.toArray()
+				.map(d => d.valueOf()),
+			compareDF.getSeries("meter").toArray(),
+			"color=g",
+			"label=Cleaned & Filled"
+		);
+
+		plt.grid(true);
+		plt.ylim(
+			0,
+			max([
+				compareDF.getSeries("consumption").max(),
+				compareDF.getSeries("meter").max()
+			])
+		);
+		plt.legend();
+		plt.show();
+		console.log("done");
+	}
 }
-test();
+testFill("225A02ME", true);
