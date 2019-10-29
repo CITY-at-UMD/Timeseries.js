@@ -128,6 +128,7 @@ async function testFull(filename) {
 }
 // testFull("../data/225A01ME.csv");
 async function testFill(meter, plot) {
+	console.time("read data");
 	let consumptionReport = await dataForge
 		.readFile(`../data/parsedConsumtionReportElectricity.csv`)
 		.parseCSV();
@@ -145,7 +146,8 @@ async function testFill(meter, plot) {
 	let rawData = await dataForge.readFile(`../data/${meter}.csv`).parseCSV();
 	rawData = rawData.parseDates("date").parseFloats("value");
 	let meterDataDF = new Timeseries(rawData); //.downsample(["month", 1], "sum");
-
+	console.timeEnd("read data");
+	console.time("thresholds");
 	let thresholds = meterDataDF.calculateThresholdOptions();
 
 	const thresholdGroups = ckmeans(
@@ -161,19 +163,27 @@ async function testFill(meter, plot) {
 	let threshold_actual = max(
 		thresholdGroups.reduce((a, b) => (a.length > b.length ? a : b))
 	);
-	let cleaned = meterDataDF
-		.clean({
-			lowerThreshold: 0,
-			upperThreshold: threshold_actual
-		})
-		.fillMissing()
-		.monthlyWithQual()
-		.generateSeries({
-			value: row => (row.score > 0.9 ? row.value : null)
-		});
+	console.timeEnd("thresholds");
+	console.log(threshold_actual);
+	console.time("clean");
+	let cleaned = meterDataDF.clean({
+		lowerThreshold: 0,
+		upperThreshold: threshold_actual
+	});
+	console.timeEnd("clean");
+	console.time("missing");
+	cleaned = cleaned.fillMissing();
+	console.timeEnd("missing");
 
+	console.time("qual");
+	cleaned = cleaned.monthlyWithQual().generateSeries({
+		value: row => (row.score > 0.9 ? row.value : null)
+	});
+	console.timeEnd("qual");
+	console.time("fill");
 	let meterFill = new Timeseries(cleaned).averageFill();
 	// console.log(meterFill.toString());
+	console.timeEnd("fill");
 	let compareRange = {
 		start: dayjs(
 			max([
@@ -237,4 +247,10 @@ async function testFill(meter, plot) {
 		console.log("done");
 	}
 }
-testFill("225A02ME", true);
+let df = new Timeseries(
+	new Array(12).fill(0).map((v, i) => ({
+		date: new Date(2018, i),
+		value: Math.random() * 100
+	}))
+);
+console.log(df.rollingPercentChange().toString());

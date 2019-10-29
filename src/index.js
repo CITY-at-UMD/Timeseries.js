@@ -17,7 +17,8 @@ import { timingSafeEqual } from "crypto";
 
 export default Timeseries;
 
-function Timeseries(data) {
+function Timeseries(data, options = {}) {
+	const { msIndex } = options;
 	if (data instanceof Timeseries) {
 		return data;
 	}
@@ -328,7 +329,25 @@ Timeseries.prototype.reduceToValue = reduceToValue;
 
 // Baseline Functions
 
-function addBaselineDelta(baselineDF) {
+function rollingPercentChange(col = "value") {
+	let df = this;
+	let delta = new Timeseries(
+		df
+			.subset(["date", col])
+			.rollingWindow(2)
+			.select(window => {
+				const amountChange = window.last()[col] - window.first()[col]; // Compute amount of change.
+				const pctChange = amountChange / window.first()[col]; // Compute % change.
+				return { date: window.last().date, delta: pctChange };
+			})
+			.inflate()
+	);
+	let withDelta = Timeseries.merge([df, delta]);
+	return new Timeseries(withDelta);
+}
+
+Timeseries.prototype.rollingPercentChange = rollingPercentChange;
+function baselinePercentChange(baselineDF) {
 	// Only Change in Year
 	if (!(baselineDF instanceof Timeseries))
 		baselineDF = new Timeseries(baselineDF);
@@ -377,7 +396,8 @@ function addBaselineDelta(baselineDF) {
 	return new Timeseries(dfwb);
 }
 
-Timeseries.prototype.addBaselineDelta = addBaselineDelta;
+Timeseries.prototype.baselinePercentChange = baselinePercentChange;
+Timeseries.prototype.addBaselineDelta = baselinePercentChange;
 
 function annualIntensity(normalizeValue = 1) {
 	let interval = this.getInterval();
@@ -606,13 +626,17 @@ function aggregate(dataframes) {
 Timeseries.aggregate = aggregate;
 Timeseries.concat = dataframes => {
 	if (!Array.isArray(dataframes)) dataframes = [dataframes];
-	dataframes = dataframes.map(df => new Timeseries(df));
+	dataframes = dataframes.map(df =>
+		new Timeseries(df).withIndex(row => row.date.valueOf())
+	);
 	let df = dataForge.DataFrame.concat(dataframes);
 	return new Timeseries(df);
 };
 Timeseries.merge = dataframes => {
 	if (!Array.isArray(dataframes)) dataframes = [dataframes];
-	dataframes = dataframes.map(df => new Timeseries(df));
+	dataframes = dataframes.map(df =>
+		new Timeseries(df).withIndex(row => row.date.valueOf())
+	);
 	let df = dataForge.DataFrame.merge(dataframes);
 	return new Timeseries(df);
 };
