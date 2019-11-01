@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
+
 const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
@@ -11,39 +12,6 @@ const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
 	if (gapSize > 0) return true;
 	return false;
 };
-const gapExists_old = (interval, maxGap) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize;
-	if (interval === "quarterHour") {
-		gapSize = Math.floor(dayjs(endDate).diff(startDate, "minutes") / 15);
-	} else {
-		gapSize = dayjs(endDate).diff(startDate, interval);
-	}
-	if (maxGap && maxGap > gapSize) return false;
-	if (gapSize > 0) return true;
-	return false;
-};
-
-const gapFillNull = ([duration, durationValue], flag) => (pairA, pairB) => {
-	const startDate = pairA[0];
-	const endDate = pairB[0];
-	let gapSize = Math.floor(
-		dayjs(endDate).diff(startDate, duration) / durationValue
-	);
-	const numEntries = gapSize - 1;
-	const newEntries = [];
-
-	for (let entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-		let date = dayjs(startDate).add((entryIndex + 1) * durationValue, duration);
-		newEntries.push([
-			date.valueOf(),
-			{ date, value: undefined, ...(flag && { flag: [flag] }) }
-		]);
-	}
-	return newEntries;
-};
-const gapFillBlank = gapFillNull;
 
 const valueFiller = (
 	fillType,
@@ -155,4 +123,65 @@ const gapFill = (
 	return newEntries;
 };
 
-export { gapExists, gapFill, gapFillBlank, gapFillNull, valueFiller };
+// Basic Fill Functions
+const averageMonthlyMap = df =>
+	new Map(
+		df
+			.group("month")
+			.select(group => ({
+				month: group.first().date.month(),
+				value: group
+					.getSeries("value")
+					.where(v => v)
+					.average()
+			}))
+			.toArray()
+			.map(({ month, value }) => [month, value])
+	);
+const fillMonthlyByMap = monthMap => row => monthMap.get(row.date.month());
+
+const pad = (df, { validOnly = true, series = "value" } = {}) => row => {
+	let values = df
+		.before(row.date.toDate())
+		.getSeries(series)
+		.where(v => v);
+	let value = values.count() > 0 ? values.last() : 0;
+	// console.log(row.date.toDate(), value);
+	return value;
+};
+const annualAverage = (
+	df,
+	{ validOnly = true, series = "value", years = 3, defaultValue } = {}
+) => row => {
+	df = df.subset(["date", series]).before(row.date.toDate());
+	let values = df
+		.where(r => r.date.year(row.date.year()).isSame(row.date))
+		.after(row.date.subtract(years, "year"))
+		.getSeries(series)
+		.where(v => v)
+		.bake();
+
+	let value;
+	if (values.count() < years) {
+		value = values
+			.appendPair([
+				null,
+				df
+					.getSeries(series)
+					.where(v => v)
+					.average()
+			])
+			.average();
+	} else {
+		value = values.average();
+	}
+	return value;
+};
+export {
+	gapExists,
+	gapFill,
+	averageMonthlyMap,
+	fillMonthlyByMap,
+	pad,
+	annualAverage
+};

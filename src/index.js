@@ -3,9 +3,23 @@ import dataForge from "data-forge";
 import { msToInterval, intervalToMS } from "./lib/Timeseries.interval";
 import isEqual from "lodash/isEqual";
 import has from "lodash/has";
+import get from "lodash/get";
 import fromPairs from "lodash/fromPairs";
-import { gapExists, gapFill, gapFillBlank } from "./lib/Timeseries.fill";
-import { medianAbsoluteDeviation, quantile } from "simple-statistics";
+import {
+	gapExists,
+	gapFill,
+	averageMonthlyMap,
+	fillMonthlyByMap,
+	pad,
+	annualAverage
+} from "./lib/Timeseries.fill";
+import {
+	ckmeans,
+	max,
+	medianAbsoluteDeviation,
+	quantile
+} from "simple-statistics";
+
 import {
 	rosnerTest,
 	boxPlotTest,
@@ -13,12 +27,12 @@ import {
 } from "./lib/Timeseries.statistics";
 import { annualScale, calculateChange } from "./lib/misc";
 import { zeroCheck } from "./lib/Timeseries.zero";
-import { timingSafeEqual } from "crypto";
 
 export default Timeseries;
-
+// Fill Options
+export { averageMonthlyMap, fillMonthlyByMap, pad, annualAverage };
 function Timeseries(data, options = {}) {
-	const { msIndex } = options;
+	// const { msIndex } = options;
 	if (data instanceof Timeseries) {
 		return data;
 	}
@@ -104,6 +118,29 @@ function calculateThresholdOptions({
 	let { thresholds: modz } = modifiedZScoreTest(noflags.toArray());
 	return { esd, box, modz };
 }
+
+function getBestThreshold() {
+	try {
+		let thresholds = this.calculateThresholdOptions();
+		const thresholdGroups = ckmeans(
+			[
+				get(thresholds, "esd.upper", null),
+				get(thresholds, "modz.upper", null),
+				get(thresholds, "box.lowerOuter", null),
+				get(thresholds, "box.upperOuter", null)
+			].filter(v => v),
+			2
+		);
+		let threshold_actual = max(
+			thresholdGroups.reduce((a, b) => (a.length > b.length ? a : b))
+		);
+		return threshold_actual;
+	} catch (error) {
+		console.error(error);
+		throw new Error("Cannot determine threshold");
+	}
+}
+
 function calculateStatistics(options = {}) {
 	const {
 		column = "value",
@@ -140,6 +177,7 @@ function calculateStatistics(options = {}) {
 
 Timeseries.prototype.calculateStatistics = calculateStatistics;
 Timeseries.prototype.calculateThresholdOptions = calculateThresholdOptions;
+Timeseries.prototype.getBestThreshold = getBestThreshold;
 
 // Chainable Methods
 function transformAllSeries(adjustmentFunction, { exclude }) {
@@ -192,32 +230,21 @@ function group(interval, toArray) {
 
 Timeseries.prototype.group = group;
 
-function removeOutliers({
-	column = "value",
-	lowerThreshold,
-	upperThreshold
-} = {}) {
-	if (lowerThreshold > upperThreshold) throw new Error("thresholds invalid");
-	let outlierCheck = (value, lowerThreshold, upperThreshold) =>
-		value < lowerThreshold || value > upperThreshold;
+function removeOutliers({ series = "value", lower, upper } = {}) {
+	if (lower > upper) throw new Error("thresholds invalid");
+	let outlierCheck = (value, lower, upper) => value < lower || value > upper;
 
-	let outliers = this.where(row =>
-		outlierCheck(row[column], lowerThreshold, upperThreshold)
-	)
+	let outliers = this.where(row => outlierCheck(row[series], lower, upper))
 		.generateSeries({
-			raw: row => row[column],
+			raw: row => row[series],
 			flag: ({ flag = [] }) => ["outlier", ...flag]
 		})
 		.transformSeries({
-			[column]: row => null
+			[series]: value => null
 		});
-	// let df = this.withSeries("raw", outliers.getSeries("raw")).withSeries(
-	// 	"flag",
-	// 	outliers.getSeries("flag")
-	// );
 
 	let merged = this.merge(outliers);
-	return new Timeseries(merged.toArray());
+	return new Timeseries(merged);
 }
 
 Timeseries.prototype.removeOutliers = removeOutliers;
@@ -331,19 +358,8 @@ Timeseries.prototype.reduceToValue = reduceToValue;
 
 function rollingPercentChange(col = "value") {
 	let df = this;
-	let delta = new Timeseries(
-		df
-			.subset(["date", col])
-			.rollingWindow(2)
-			.select(window => {
-				const amountChange = window.last()[col] - window.first()[col]; // Compute amount of change.
-				const pctChange = amountChange / window.first()[col]; // Compute % change.
-				return { date: window.last().date, delta: pctChange };
-			})
-			.inflate()
-	);
-	let withDelta = Timeseries.merge([df, delta]);
-	return new Timeseries(withDelta);
+	let delta = df.withSeries("delta", full.getSeries("value").percentChange());
+	return new Timeseries(delta);
 }
 
 Timeseries.prototype.rollingPercentChange = rollingPercentChange;
@@ -435,25 +451,44 @@ Timeseries.prototype.annualIntensity = annualIntensity;
 // Fill Functions
 
 function fillMissing() {
-	let startDate = this.first().date.toDate(),
-		endDate = this.last().date.toDate();
-	let interval = this.getInterval();
+	let df = this;
+	let startDate = df.first().date.toDate(),
+		endDate = df.last().date.toDate();
+	let interval = df.getInterval();
 	let bdf = Timeseries.blank(startDate, endDate, interval, "missing").withIndex(
 		row => row.date.valueOf()
 	);
-	let m = this.withIndex(row => row.date.valueOf()).merge(bdf);
-	m = m.transformSeries({
-		flag: row => (row.value ? undefined : row.flag)
+	let m = bdf.merge(df.withIndex(row => row.date.valueOf())).generateSeries({
+		flag: row =>
+			row.value === null || row.value === undefined ? row.flag : undefined
 	});
 	m = new Timeseries(m);
 	return m;
 }
 Timeseries.prototype.fillMissing = fillMissing;
-function fillNull(v) {
-	let df = this.transformSeries({
-		value: value => (value === null || value === undefined ? v : value)
-	});
-	return new Timeseries(df);
+
+function fillNull({ series = "value", value, callback }) {
+	const seriesCheck = row => row[series] === null || row[series] === undefined;
+	if (callback) {
+		let df = this.generateSeries({
+			flag: row =>
+				seriesCheck(row) ? ["fill", ...(row.flag || [])] : row.flag,
+			[series]: row => (seriesCheck(row) ? callback(row) : row[series])
+		});
+		return new Timeseries(df);
+	} else if (value) {
+		let df = this.generateSeries({
+			flag: row => (seriesCheck(row) ? ["fill", ...(row.flag || [])] : row.flag)
+		}).transformSeries({
+			[series]: currentValue =>
+				currentValue === null || currentValue === undefined
+					? value
+					: currentValue
+		});
+		return new Timeseries(df);
+	} else {
+		return this;
+	}
 }
 Timeseries.prototype.fillNull = fillNull;
 
@@ -516,10 +551,10 @@ function monthlyWithQual() {
 }
 Timeseries.prototype.monthlyWithQual = monthlyWithQual;
 
-function threeYearAverage(date, column = "value", defaultValue) {
+function threeYearAverage(date, series = "value", defaultValue) {
 	date = dayjs(date);
 	if (!defaultValue)
-		defaultValue = this.getSeries("value")
+		defaultValue = this.getSeries(series)
 			.where(v => !isNaN(v) && v !== null)
 			.average();
 
@@ -535,7 +570,7 @@ function threeYearAverage(date, column = "value", defaultValue) {
 	// .where(row => row.score > 0.9);
 	if (months.count() > 0) {
 		let val = months
-			.getSeries(column)
+			.getSeries(series)
 			.where(v => !isNaN(v) && v !== null)
 			.average();
 		return val;
@@ -581,13 +616,16 @@ function blank(startDate, endDate, [duration, value = 1], flag) {
 	while (dates[dates.length - 1].valueOf() < endDate.valueOf()) {
 		dates.push(dayjs(dates[dates.length - 1]).add(value, duration));
 	}
-	let df = new Timeseries(dates.map(date => ({ date, ...(flag && { flag }) })));
-	// if (flag) {
-	// 	df = df.generateSeries({
-	// 		flag: row => [flag]
-	// 	});
-	// 	df = new Timeseries(df);
-	// }
+	let df = new Timeseries(dates.map(date => ({ date })));
+
+	if (flag) {
+		df = new Timeseries(
+			df.generateSeries({
+				flag: row => [flag]
+			})
+		);
+	}
+
 	return df;
 }
 Timeseries.blank = blank;
