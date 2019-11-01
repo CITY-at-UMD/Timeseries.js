@@ -11,7 +11,10 @@ import {
 	averageMonthlyMap,
 	fillMonthlyByMap,
 	pad,
-	annualAverage
+	annualAverage,
+	annualMonthlyAverageMap,
+	monthlyRollingAverageMap,
+	fillMonthlyBAnnualyMap
 } from "./lib/Timeseries.fill";
 import {
 	ckmeans,
@@ -30,7 +33,15 @@ import { zeroCheck } from "./lib/Timeseries.zero";
 
 export default Timeseries;
 // Fill Options
-export { averageMonthlyMap, fillMonthlyByMap, pad, annualAverage };
+export {
+	annualAverage,
+	averageMonthlyMap,
+	annualMonthlyAverageMap,
+	monthlyRollingAverageMap,
+	fillMonthlyBAnnualyMap,
+	fillMonthlyByMap,
+	pad
+};
 function Timeseries(data, options = {}) {
 	// const { msIndex } = options;
 	if (data instanceof Timeseries) {

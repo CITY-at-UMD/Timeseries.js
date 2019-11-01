@@ -138,7 +138,65 @@ const averageMonthlyMap = df =>
 			.toArray()
 			.map(({ month, value }) => [month, value])
 	);
+const annualMonthlyAverageMap = df =>
+	new Map(
+		df
+			.groupBy(row => row.date.year())
+			.select(group => {
+				const date = group.first().date.startOf("year");
+				let ts = new Timeseries(group).downsample(["month", 1], "avg");
+				let avg = ts.getSeries("value").average();
+				let map = averageMonthlyMap(ts);
+				map.set("avg", avg);
+				return [date.year(), map];
+			})
+			.toArray()
+	);
+const monthlyRollingAverageMap = (df, { years = 3, series = "value" } = {}) => {
+	let months = df
+		.groupBy(row => row.date.startOf("month").toDate())
+		.select(group => {
+			let date = group.first().date.startOf("month");
+			let value = group
+				.getSeries(series)
+				.where(v => v)
+				.average();
+			return { date, value };
+		})
+		.inflate()
+		.withIndex(row => row.date.toDate())
+		.bake();
+	let data = months
+		.groupBy(row => row.date.month())
+		.select(group => {
+			let averages = new Map(
+				group
+					.rollingWindow(years)
+					.select(window => [
+						window.last().date.year(),
+						window.getSeries(series).average()
+					])
+			);
+			let na = group
+				.where(row => !averages.has(row.date.year()))
+				.forEach(row => {
+					let value =
+						months.before(row.date.toDate()).count() > 0
+							? months.before(row.date.toDate()).last()[series]
+							: months.getSeries(series).average();
+					averages.set(row.date.year(), value);
+				});
+
+			let month = group.first().date.month();
+			return [month, averages];
+		})
+		.toArray();
+	return new Map(data);
+};
+
 const fillMonthlyByMap = monthMap => row => monthMap.get(row.date.month());
+const fillMonthlyBAnnualyMap = annualMonthlyMap => row =>
+	annualMonthlyMap.get(row.date.month()).get(row.date.year());
 
 const pad = (df, { validOnly = true, series = "value" } = {}) => row => {
 	let values = df
@@ -153,20 +211,25 @@ const annualAverage = (
 	df,
 	{ validOnly = true, series = "value", years = 3, defaultValue } = {}
 ) => row => {
-	df = df.subset(["date", series]).before(row.date.toDate());
-	let values = df
-		.where(r => r.date.year(row.date.year()).isSame(row.date))
-		.after(row.date.subtract(years, "year"))
-		.getSeries(series)
-		.where(v => v)
+	let subset = df
+		.subset(["date", series])
+		.after(row.date.subtract(years, "year").toDate())
+		.before(row.date.toDate())
 		.bake();
+	let values = subset
+		.where(r => r.date.month() === row.date.month())
+		.where(r => r.date.date() === row.date.date())
+		.where(r => r.date.hour() === row.date.hour())
+		.where(r => r.date.minute() === row.date.minute())
+		.getSeries(series)
+		.where(v => v);
 
 	let value;
 	if (values.count() < years) {
 		value = values
 			.appendPair([
 				null,
-				df
+				subset
 					.getSeries(series)
 					.where(v => v)
 					.average()
@@ -175,6 +238,7 @@ const annualAverage = (
 	} else {
 		value = values.average();
 	}
+	// console.log(row.date.toDate(), values.toArray(), value);
 	return value;
 };
 export {
@@ -183,5 +247,8 @@ export {
 	averageMonthlyMap,
 	fillMonthlyByMap,
 	pad,
-	annualAverage
+	annualAverage,
+	annualMonthlyAverageMap,
+	monthlyRollingAverageMap,
+	fillMonthlyBAnnualyMap
 };
