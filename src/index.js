@@ -29,7 +29,6 @@ import {
 	modifiedZScoreTest
 } from "./lib/Timeseries.statistics";
 import { annualScale, calculateChange } from "./lib/misc";
-import { zeroCheck } from "./lib/Timeseries.zero";
 
 export default Timeseries;
 // Fill Options
@@ -191,6 +190,12 @@ Timeseries.prototype.calculateThresholdOptions = calculateThresholdOptions;
 Timeseries.prototype.getBestThreshold = getBestThreshold;
 
 // Chainable Methods
+function betweenDates(start, end) {
+	let df = this.between(start, end);
+	return new Timeseries(df);
+}
+Timeseries.prototype.betweenDates = betweenDates;
+
 function transformAllSeries(adjustmentFunction, { exclude }) {
 	let df = this;
 	let columns = (columns = df
@@ -503,23 +508,45 @@ function fillNull({ series = "value", value, callback }) {
 }
 Timeseries.prototype.fillNull = fillNull;
 
-function zeroReplacement(threshold) {
+function zeroFaultDetection(thresholdInterval) {
+	if (!Array.isArray(thresholdInterval))
+		thresholdInterval = [thresholdInterval, 1];
+	thresholdInterval = intervalToMS(thresholdInterval);
 	let df = this;
-	let { zeroGroups } = zeroCheck(df, threshold);
-	let dfs = zeroGroups.toArray().map((zdf, i) => {
-		zdf = zdf
-			.transformSeries({
-				value: () => null,
-				raw: () => 0,
-				flag: value => ["zero", ...(value || [])]
-			})
-			.withIndex(row => new Date(row.date).valueOf());
-		return zdf;
-	});
-	let merged = df.withIndex(row => row.date.valueOf()).merge(...dfs);
-	return new Timeseries(merged);
+	let zeroFaultDates = df
+		.where(row => row.value === 0)
+		.ensureSeries(
+			"interval",
+			df
+				.where(row => row.value === 0)
+				.getSeries("date")
+				.amountChange()
+		)
+		.where(v => v.interval <= thresholdInterval)
+		.subset(["date"])
+		.generateSeries({ value: row => null, flag: row => ["zeroFault"] });
+
+	let zeroFaultDF = new Timeseries(this.merge(zeroFaultDates));
+	return zeroFaultDF;
 }
-Timeseries.prototype.zeroReplacement = zeroReplacement;
+
+Timeseries.prototype.zeroFaultDetection = zeroFaultDetection;
+
+function dataQuality() {
+	let count = this.count();
+	let withFlags = this.where(r => Array.isArray(r.flag) && r.flag.length > 0)
+		.groupBy(r => r.flag.toString())
+		.select(group => ({
+			flag: group.first().flag,
+			count: group.count(),
+			percent: (group.count() / count) * 100
+		}))
+		.inflate();
+	console.log(withFlags.toString());
+	return {};
+}
+
+Timeseries.prototype.dataQuality = dataQuality;
 
 function monthlyWithQual() {
 	let interval = this.getInterval();
@@ -672,6 +699,7 @@ function aggregate(dataframes) {
 
 	return new Timeseries(concatenated);
 }
+
 Timeseries.aggregate = aggregate;
 Timeseries.concat = dataframes => {
 	if (!Array.isArray(dataframes)) dataframes = [dataframes];
