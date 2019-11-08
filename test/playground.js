@@ -1,7 +1,8 @@
 const dataForge = require("data-forge");
 require("data-forge-fs");
-const Timeseries = require("../dist/index").default;
+// const Timeseries = require("../dist/index").default;
 const {
+	Timeseries,
 	averageMonthlyMap,
 	fillMonthlyByMap,
 	pad,

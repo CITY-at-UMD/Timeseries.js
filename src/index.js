@@ -30,9 +30,10 @@ import {
 } from "./lib/Timeseries.statistics";
 import { annualScale, calculateChange } from "./lib/misc";
 
-export default Timeseries;
+// export default ;
 // Fill Options
 export {
+	Timeseries,
 	annualAverage,
 	averageMonthlyMap,
 	annualMonthlyAverageMap,

@@ -1,25 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0"
-    />
-    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-    <title>TEst</title>
-  </head>
-  <body>
-    <div id="results"></div>
-  </body>
-  <script src="../dist/index.js"></script>
-  <script>
-    const randomData = () =>
-      new Array(4).fill(0).map((v, i) => ({
-        date: new Date(2018 - i, 0),
-        value: 2000000 + Math.random() * 1000000
-      }));
-    let df = new Timeseries(randomData());
-    document.getElementById("results").innerHTML = df.toString();
-  </script>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="X-UA-Compatible" content="ie=edge" />
+		<title>TEst</title>
+	</head>
+	<body>
+		<div id="results"></div>
+	</body>
+	<script src="../dist/index.js"></script>
+	<script>
+		const randomData = () =>
+			new Array(4).fill(0).map((v, i) => ({
+				date: new Date(2018 - i, 0),
+				value: 2000000 + Math.random() * 1000000
+			}));
+		let df = new Timeseries(randomData());
+		document.getElementById("results").innerHTML = df.toString();
+	</script>
 </html>
