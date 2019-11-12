@@ -83,5 +83,14 @@ function testClean() {
 		filled.getSeries("value").sum()
 	);
 }
-
-testClean();
+let df = new Timeseries(
+	new Array(5).fill(0).map((v, i) => ({
+		date: dayjs(new Date(2015 + i, 0)),
+		value: Math.random() * 100
+	}))
+);
+console.log(df.toString());
+let baseline = df.betweenDates(new Date(2018, 0), new Date(2019, 0, 0));
+console.log(baseline.toString());
+let wb = df.baselinePercentChange(baseline);
+console.log(wb.toString());

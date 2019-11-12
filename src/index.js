@@ -375,7 +375,7 @@ Timeseries.prototype.reduceToValue = reduceToValue;
 
 function rollingPercentChange(col = "value") {
 	let df = this;
-	let delta = df.withSeries("delta", full.getSeries("value").percentChange());
+	let delta = df.withSeries("delta", df.getSeries("value").percentChange());
 	return new Timeseries(delta);
 }
 
