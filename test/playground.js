@@ -84,22 +84,16 @@ function testClean() {
 	);
 }
 let df = new Timeseries(
-	new Array(8760*10).fill(0).map((v, i) => ({
+	new Array(8760 * 10).fill(0).map((v, i) => ({
 		date: dayjs(new Date(2015, 0, 1, i)),
 		value: Math.random() * 100,
-		v2: Math.random() * 100
+		v2: Math.random() * 100,
+		v3: Math.random() * 100
 	}))
 );
 console.log(df.tail(10).toString());
-console.time("object");
+let ndf = df.generateSeries({
+	total: row => ["value", "v2"].map(v => row[v]).reduce((a, b) => a + b, 0)
+});
 
-// let sum = df
-// 	.getSeries("value")
-// 	.toArray()
-// 	.map(cumulativeSum);
-let ndf = df.cumulativeSum().bake();
-
-console.timeEnd("object");
 console.log(ndf.tail(10).toString());
-
-console.log(df.getSeries("value").sum());

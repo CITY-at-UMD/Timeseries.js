@@ -382,6 +382,15 @@ function cumulativeSum(series) {
 	return new Timeseries(df);
 }
 Timeseries.prototype.cumulativeSum = cumulativeSum;
+
+function totalRows(series = ["value"], colname = "total") {
+	let ndf = this.generateSeries({
+		[colname]: row => series.map(v => row[v]).reduce((a, b) => a + b, 0)
+	});
+	return new Timeseries(ndf);
+}
+Timeseries.prototype.totalRows = totalRows;
+
 // Baseline Functions
 function rollingPercentChange(col = "value") {
 	let df = this;
@@ -709,8 +718,6 @@ function aggregate(dataframes) {
 			return o;
 		})
 		.inflate();
-	// .toArray();
-
 	return new Timeseries(concatenated);
 }
 
