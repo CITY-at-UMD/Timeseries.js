@@ -371,8 +371,18 @@ function reduceToValue(columnNames) {
 
 Timeseries.prototype.reduceToValue = reduceToValue;
 
+function cumulativeSum(series) {
+	if (!series) series = this.getValueColumns();
+	if (series & !Array.isArray(series)) series = [series];
+	let df = this;
+	const cumulativeSum = sum => value => (sum += value);
+	series.forEach(s => {
+		df = df.withSeries(s, df.getSeries(s).select(cumulativeSum(0)));
+	});
+	return new Timeseries(df);
+}
+Timeseries.prototype.cumulativeSum = cumulativeSum;
 // Baseline Functions
-
 function rollingPercentChange(col = "value") {
 	let df = this;
 	let delta = df.withSeries("delta", df.getSeries("value").percentChange());
@@ -472,9 +482,12 @@ function fillMissing() {
 	let startDate = df.first().date.toDate(),
 		endDate = df.last().date.toDate();
 	let interval = df.getInterval();
-	let bdf = Timeseries.blank(startDate, endDate, interval, "missing").withIndex(
-		row => row.date.valueOf()
-	);
+	let bdf = Timeseries.blank(
+		startDate,
+		endDate,
+		interval,
+		"missing"
+	).withIndex(row => row.date.valueOf());
 	let m = bdf.merge(df.withIndex(row => row.date.valueOf())).generateSeries({
 		flag: row =>
 			row.value === null || row.value === undefined ? row.flag : undefined

@@ -84,13 +84,22 @@ function testClean() {
 	);
 }
 let df = new Timeseries(
-	new Array(5).fill(0).map((v, i) => ({
-		date: dayjs(new Date(2015 + i, 0)),
-		value: Math.random() * 100
+	new Array(8760*10).fill(0).map((v, i) => ({
+		date: dayjs(new Date(2015, 0, 1, i)),
+		value: Math.random() * 100,
+		v2: Math.random() * 100
 	}))
 );
-console.log(df.toString());
-let baseline = df.betweenDates(new Date(2018, 0), new Date(2019, 0, 0));
-console.log(baseline.toString());
-let wb = df.baselinePercentChange(baseline);
-console.log(wb.toString());
+console.log(df.tail(10).toString());
+console.time("object");
+
+// let sum = df
+// 	.getSeries("value")
+// 	.toArray()
+// 	.map(cumulativeSum);
+let ndf = df.cumulativeSum().bake();
+
+console.timeEnd("object");
+console.log(ndf.tail(10).toString());
+
+console.log(df.getSeries("value").sum());
