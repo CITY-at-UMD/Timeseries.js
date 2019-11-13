@@ -86,8 +86,8 @@ function testClean() {
 let df = new Timeseries(
 	new Array(8760 * 10).fill(0).map((v, i) => ({
 		date: dayjs(new Date(2015, 0, 1, i)),
-		value: Math.random() * 100,
-		v2: Math.random() * 100,
+		value: 0,
+		v2: 0,
 		v3: Math.random() * 100
 	}))
 );
@@ -95,5 +95,7 @@ console.log(df.tail(10).toString());
 let ndf = df.generateSeries({
 	total: row => ["value", "v2"].map(v => row[v]).reduce((a, b) => a + b, 0)
 });
+let nndf = df.totalRows(["value", "v2", "vv"]);
 
 console.log(ndf.tail(10).toString());
+console.log(nndf.tail(10).toString());
