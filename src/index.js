@@ -385,7 +385,7 @@ Timeseries.prototype.cumulativeSum = cumulativeSum;
 
 function totalRows(series = ["value"], colname = "total") {
 	let ndf = this.generateSeries({
-		[colname]: row => series.map(v => row[v]).reduce((a, b) => a + b, 0)
+		[colname]: row => series.map(v => row[v] || 0).reduce((a, b) => a + b, 0)
 	});
 	return new Timeseries(ndf);
 }
