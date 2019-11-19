@@ -371,14 +371,16 @@ function reduceToValue(columnNames) {
 
 Timeseries.prototype.reduceToValue = reduceToValue;
 
-function cumulativeSum(series) {
-	if (!series) series = this.getValueColumns();
-	if (series & !Array.isArray(series)) series = [series];
+function cumulativeSum(columns) {
+	if (!columns) columns = this.getValueColumns();
+	if (columns & !Array.isArray(columns)) columns = [columns];
 	let df = this;
+	console.log(df.getColumnNames());
 	const cumulativeSum = sum => value => (sum += value);
-	series.forEach(s => {
+	columns.forEach(s => {
 		df = df.withSeries(s, df.getSeries(s).select(cumulativeSum(0)));
 	});
+	// console.log(df.toString());
 	return new Timeseries(df);
 }
 Timeseries.prototype.cumulativeSum = cumulativeSum;
@@ -390,11 +392,14 @@ function totalRows(series = ["value"], colname = "total") {
 	return new Timeseries(ndf);
 }
 Timeseries.prototype.totalRows = totalRows;
+Timeseries.prototype.totalRow = totalRows;
+Timeseries.prototype.totalColumns = totalRows;
 
 // Baseline Functions
-function rollingPercentChange(col = "value") {
+function rollingPercentChange(col = "value", decimal = true) {
 	let df = this;
 	let delta = df.withSeries("delta", df.getSeries("value").percentChange());
+	if (decimal) delta = data.transformSeries({ delta: value => value / 100 });
 	return new Timeseries(delta);
 }
 
@@ -562,11 +567,22 @@ function dataQuality() {
 		.select(group => ({
 			flag: group.first().flag,
 			count: group.count(),
-			percent: (group.count() / count) * 100
+			percent: group.count() / count
 		}))
 		.inflate();
-	console.log(withFlags.toString());
-	return {};
+	let good = this.where(
+		r =>
+			r.flag === undefined ||
+			r.flag === null ||
+			(Array.isArray(r.flag) && r.flag.length === 0)
+	).count();
+	let quality = withFlags
+		.appendPair([
+			withFlags.count(),
+			{ flag: "clean", count: good, percent: good / count }
+		])
+		.orderByDescending(row => row.count);
+	return quality;
 }
 
 Timeseries.prototype.dataQuality = dataQuality;
