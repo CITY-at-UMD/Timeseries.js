@@ -83,12 +83,13 @@ async function testClean(meter) {
 			.dataQuality()
 			.toString()
 	);
-	console.log(
-		filled
-			.betweenDates(new Date(2018, 0), new Date(2019, 0, 0))
-			.dataQuality()
-			.toCSV()
-	);
+	let both = Timeseries.merge([
+		filled.renameSeries({ value: "cleaned" }),
+		df.renameSeries({ value: "raw" })
+	]);
+	console.log(both.head(10).toString());
+	console.log(both.cvrsme("cleaned", "raw"));
+	console.log(both.nmbe("cleaned", "raw"));
 }
 
 testClean("225A01ME");

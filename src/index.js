@@ -101,6 +101,43 @@ Timeseries.prototype.getValueColumns = getValueColumns;
 Timeseries.prototype.getInterval = interval;
 Timeseries.prototype.getDateRange = dateRange;
 
+// Statistics
+function cvrsme(actual, simulated) {
+	let df = this.subset([actual, simulated])
+		.resetIndex()
+		.generateSeries({
+			actual: row => row[actual] || 0,
+			simulated: row => row[simulated] || 0
+		})
+		.dropSeries([actual, simulated])
+		.generateSeries({ diff: row => row.actual - row.simulated });
+	console.log(df.head(10).toString());
+	let n = df.count();
+	let p = 1.0;
+	let ybar = df.getSeries(actual).sum() / n;
+	let v = Math.sqrt(df.getSeries("diff").sum() / (n - p)) / ybar;
+	return v;
+}
+function nmbe(actual, simulated) {
+	let df = this.subset([actual, simulated])
+		.resetIndex()
+		.generateSeries({
+			actual: row => row[actual] || 0,
+			simulated: row => row[simulated] || 0
+		})
+		.dropSeries([actual, simulated])
+		.generateSeries({ diff: row => row.actual - row.simulated });
+	console.log(df.head(10).toString());
+	let n = df.count();
+	let p = 1.0;
+	let ybar = df.getSeries("actual").sum() / n;
+	console.log(n, p, ybar, df.getSeries("diff").sum());
+	let b = df.getSeries("diff").sum() / ((n - p) * ybar);
+	return b;
+}
+Timeseries.prototype.cvrsme = cvrsme;
+Timeseries.prototype.nmbe = nmbe;
+
 // Methods
 function calculateThresholdOptions({
 	k,
