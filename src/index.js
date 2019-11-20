@@ -111,10 +111,9 @@ function cvrsme(actual, simulated) {
 		})
 		.dropSeries([actual, simulated])
 		.generateSeries({ diff: row => row.actual - row.simulated });
-	console.log(df.head(10).toString());
 	let n = df.count();
 	let p = 1.0;
-	let ybar = df.getSeries(actual).sum() / n;
+	let ybar = df.getSeries("actual").sum() / n;
 	let v = Math.sqrt(df.getSeries("diff").sum() / (n - p)) / ybar;
 	return v;
 }
@@ -127,11 +126,10 @@ function nmbe(actual, simulated) {
 		})
 		.dropSeries([actual, simulated])
 		.generateSeries({ diff: row => row.actual - row.simulated });
-	console.log(df.head(10).toString());
+
 	let n = df.count();
 	let p = 1.0;
 	let ybar = df.getSeries("actual").sum() / n;
-	console.log(n, p, ybar, df.getSeries("diff").sum());
 	let b = df.getSeries("diff").sum() / ((n - p) * ybar);
 	return b;
 }
@@ -412,12 +410,10 @@ function cumulativeSum(columns) {
 	if (!columns) columns = this.getValueColumns();
 	if (columns & !Array.isArray(columns)) columns = [columns];
 	let df = this;
-	console.log(df.getColumnNames());
 	const cumulativeSum = sum => value => (sum += value);
 	columns.forEach(s => {
 		df = df.withSeries(s, df.getSeries(s).select(cumulativeSum(0)));
 	});
-	// console.log(df.toString());
 	return new Timeseries(df);
 }
 Timeseries.prototype.cumulativeSum = cumulativeSum;
