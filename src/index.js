@@ -740,7 +740,13 @@ function averageFill() {
 }
 
 Timeseries.prototype.averageFill = averageFill;
-
+function toArray() {
+	return this.toArray().map(({ date, ...others }) => ({
+		date: date.toDate(),
+		...others
+	}));
+}
+Timeseries.prototype.toArray = toArray;
 // Static Methods
 function blank(startDate, endDate, [duration, value = 1], flag) {
 	if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {

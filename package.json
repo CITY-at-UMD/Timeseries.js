@@ -1,6 +1,6 @@
 {
 	"name": "Timeseries",
-	"version": "3.3.6",
+	"version": "3.3.8",
 	"license": "MIT",
 	"dependencies": {
 		"data-forge": "^1.7.5",

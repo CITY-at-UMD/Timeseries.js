@@ -92,4 +92,6 @@ async function testClean(meter) {
 }
 
 // testClean("233A01ME");
-testClean("225A01ME");
+// testClean("225A01ME");
+let d = new Timeseries([]);
+d.annualIntensity(10);
