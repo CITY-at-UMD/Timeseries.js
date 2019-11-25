@@ -42,7 +42,7 @@ export {
 	fillMonthlyByMap,
 	pad
 };
-function Timeseries(data, options = {}) {
+function Timeseries(data = [], options = {}) {
 	// const { msIndex } = options;
 	if (data instanceof Timeseries) {
 		return data;
@@ -365,7 +365,36 @@ function downsample([duration, value], fillType = "sum") {
 }
 
 Timeseries.prototype.downsample = downsample;
-
+function downsampleClean([duration, value], threshold = 0.8) {
+	if (["hour", "day", "month", "year"].indexOf(duration) === -1)
+		throw new Error("interval type not supported");
+	let dateComparison = row => row.date.startOf(duration);
+	let valueColumns = this.getValueColumns();
+	if (value) {
+		dateComparison = row => row.date.startOf(duration).add(value, duration);
+	}
+	let df = this.groupBy(dateComparison)
+		.select(group => {
+			const date = group.first().date.startOf(duration);
+			let quality = new Timeseries(group).dataQuality().setIndex("flag");
+			let clean = quality.at("clean").percent;
+			console.log(date.format("MMMM YYYY"), clean);
+			return {
+				date,
+				value:
+					clean >= threshold
+						? group
+								.deflate(row => row.value)
+								.where(v => !isNaN(v) && v !== null)
+								.sum()
+						: null
+			};
+		})
+		.inflate()
+		.withIndex(row => dayjs(row.date).toDate());
+	return new Timeseries(df);
+}
+Timeseries.prototype.downsampleClean = downsampleClean;
 function upsample([duration, value], fillType = "avg") {
 	// Dont use this b/c it has the raw and flag values
 	let df = this.fillGaps(

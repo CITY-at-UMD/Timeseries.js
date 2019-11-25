@@ -83,4 +83,12 @@ function testClean() {
 		filled.getSeries("value").sum()
 	);
 }
-testClean();
+// testClean();
+
+let df = new Timeseries(
+	new Array(8760 * 4).fill(0).map((v, i) => ({
+		date: dayjs(new Date(2018, 0, 0, i)),
+		value: Math.random() * 100
+	}))
+);
+console.log(new Timeseries([df.last()]).toString());

@@ -52,19 +52,22 @@ async function testClean(meter) {
 	console.log("zero count", cleaned.where(v => v.value === 0).count());
 	console.timeEnd("zero");
 	let full = cleaned.fillMissing();
+	let monthly = full.downsampleClean(["month", 1]);
+	// console.log(monthly.dropSeries("flag").toString());
+	let rollingmap = monthlyRollingAverageMap(monthly);
 
-	let rolling = monthlyRollingAverageMap(full);
-	console.log(rolling);
 	console.log(
 		"filling: ",
-		full
+		monthly
 			.getSeries("value")
 			.where(v => !v && v !== 0)
 			.count()
 	);
 
 	console.time("filling");
-	let filled = full.fillNull({ callback: fillMonthlyBAnnualyMap(rolling) });
+	let filled = monthly.fillNull({
+		callback: fillMonthlyBAnnualyMap(rollingmap)
+	});
 	console.timeEnd("filling");
 	// console.log(filled.toString());
 	console.log(
@@ -77,19 +80,15 @@ async function testClean(meter) {
 	);
 
 	console.log(filled.dataQuality().toString());
-	console.log(
-		filled
-			.betweenDates(new Date(2018, 0), new Date(2019, 0, 0))
-			.dataQuality()
-			.toString()
-	);
-	let both = Timeseries.merge([
-		filled.renameSeries({ value: "cleaned" }),
-		df.renameSeries({ value: "raw" })
-	]);
-	console.log(both.head(10).toString());
-	console.log(both.cvrsme("cleaned", "raw"));
-	console.log(both.nmbe("cleaned", "raw"));
+	let s = filled.betweenDates(new Date(2016, 0), new Date(2017, 0, 0));
+	let e = filled.betweenDates(new Date(2018, 0), new Date(2019, 0, 0));
+	console.log("2016");
+	console.log(s.dataQuality().toString());
+	console.log(s.getSeries("value").sum());
+	console.log("2018");
+	console.log(e.dataQuality().toString());
+	console.log(e.getSeries("value").sum());
+	console.log(e.toString());
 }
 
 testClean("225A01ME");
