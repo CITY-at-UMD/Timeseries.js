@@ -378,7 +378,6 @@ function downsampleClean([duration, value], threshold = 0.8) {
 			const date = group.first().date.startOf(duration);
 			let quality = new Timeseries(group).dataQuality().setIndex("flag");
 			let clean = quality.at("clean").percent;
-			console.log(date.format("MMMM YYYY"), clean);
 			return {
 				date,
 				value:

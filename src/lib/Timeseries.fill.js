@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import fromPairs from "lodash/fromPairs";
 import toPairs from "lodash/toPairs";
 import { mean } from "simple-statistics";
+import { Timeseries } from "../index";
 const gapExists = ([duration, durationValue = 1]) => (pairA, pairB) => {
 	const startDate = pairA[0];
 	const endDate = pairB[0];
@@ -154,7 +155,7 @@ const annualMonthlyAverageMap = df =>
 	);
 const monthlyRollingAverageMap = (
 	df,
-	{ years = 3, series = "value", aggregator = "average" } = {}
+	{ years = 3, series = "value", aggregator = "average", validOnly = true } = {}
 ) => {
 	let months = df
 		.groupBy(row => row.date.startOf("month").toDate())
@@ -162,7 +163,7 @@ const monthlyRollingAverageMap = (
 			let date = group.first().date.startOf("month");
 			let value = group
 				.getSeries(series)
-				.where(v => v)
+				.where(v => (validOnly ? Boolean(v) : true))
 				.average();
 			return { date, value };
 		})
@@ -173,12 +174,17 @@ const monthlyRollingAverageMap = (
 		.groupBy(row => row.date.month())
 		.select(group => {
 			let values = new Map(
-				group
-					.rollingWindow(years)
-					.select(window => [
-						window.last().date.year(),
-						window.getSeries(series).average()
-					])
+				group.rollingWindow(years).select(window => [
+					window.last().date.year(),
+					window
+						.getSeries(series)
+						.where(v => (validOnly ? Boolean(v) : true))
+						.average() ||
+						group
+							.getSeries(series)
+							.where(v => (validOnly ? Boolean(v) : true))
+							.average()
+				])
 			);
 			group
 				.where(row => !values.has(row.date.year()))
@@ -192,9 +198,9 @@ const monthlyRollingAverageMap = (
 
 			let month = group.first().date.month();
 			return [month, values];
-		})
-		.toArray();
-	return new Map(data);
+		});
+
+	return new Map(data.toArray());
 };
 
 const fillMonthlyByMap = monthMap => row => monthMap.get(row.date.month());
@@ -203,7 +209,7 @@ const fillMonthlyBAnnualyMap = annualMonthlyMap => row => {
 		year = row.date.year();
 	if (annualMonthlyMap.has(month)) {
 		if (annualMonthlyMap.has(month)) {
-			return  annualMonthlyMap.get(month).get(year);
+			return annualMonthlyMap.get(month).get(year);
 		} else {
 			return mean([...annualMonthlyMap.get(month).values()]);
 		}
@@ -222,7 +228,6 @@ const pad = (df, { validOnly = true, series = "value" } = {}) => row => {
 		.getSeries(series)
 		.where(v => v);
 	let value = values.count() > 0 ? values.last() : 0;
-	// console.log(row.date.toDate(), value);
 	return value;
 };
 const annualAverage = (
@@ -256,7 +261,6 @@ const annualAverage = (
 	} else {
 		value = values.average();
 	}
-	// console.log(row.date.toDate(), values.toArray(), value);
 	return value;
 };
 export {

@@ -53,9 +53,9 @@ async function testClean(meter) {
 	console.timeEnd("zero");
 	let full = cleaned.fillMissing();
 	let monthly = full.downsampleClean(["month", 1]);
-	// console.log(monthly.dropSeries("flag").toString());
+	console.log(monthly.dropSeries("flag").toString());
 	let rollingmap = monthlyRollingAverageMap(monthly);
-
+	console.log(rollingmap);
 	console.log(
 		"filling: ",
 		monthly
@@ -91,4 +91,5 @@ async function testClean(meter) {
 	console.log(e.toString());
 }
 
+// testClean("233A01ME");
 testClean("225A01ME");
