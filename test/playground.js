@@ -92,3 +92,4 @@ let df = new Timeseries(
 	}))
 );
 console.log(new Timeseries([df.last()]).toString());
+console.log(df.toArray())

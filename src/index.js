@@ -741,7 +741,13 @@ function averageFill() {
 
 Timeseries.prototype.averageFill = averageFill;
 function toArray() {
-	return this.toArray().map(({ date, ...others }) => ({
+	const values = [];
+	for (const value of this.getContent().values) {
+		if (value !== undefined) {
+			values.push(value);
+		}
+	}
+	return values.map(({ date, ...others }) => ({
 		date: date.toDate(),
 		...others
 	}));
