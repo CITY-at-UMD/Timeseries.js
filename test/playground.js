@@ -91,5 +91,9 @@ let df = new Timeseries(
 		value: Math.random() * 100
 	}))
 );
-console.log(new Timeseries([df.last()]).toString());
-console.log(df.toArray())
+console.log(df.at(new Date(2018, 0)));
+console.log(df.atDate(new Date(2018, 0)));
+let d = dayjs(12);
+let dd = dayjs(12);
+console.log(dd === d);
+console.log(dd.valueOf() === d.valueOf());

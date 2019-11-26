@@ -227,6 +227,8 @@ Timeseries.prototype.getBestThreshold = getBestThreshold;
 
 // Chainable Methods
 function betweenDates(start, end) {
+	start = dayjs(start).toDate();
+	end = dayjs(end).toDate();
 	let df = this.between(start, end);
 	return new Timeseries(df);
 }
@@ -753,6 +755,22 @@ function toArray() {
 	}));
 }
 Timeseries.prototype.toArray = toArray;
+
+function atDate(date) {
+	if (this.none()) {
+		return undefined;
+	}
+	date = dayjs(date).valueOf();
+
+	for (const pair of this.getContent().pairs) {
+		if (pair[0].valueOf() === date) {
+			return pair[1];
+		}
+	}
+	return undefined;
+}
+Timeseries.prototype.atDate = atDate;
+
 // Static Methods
 function blank(startDate, endDate, [duration, value = 1], flag) {
 	if (["minute", "hour", "day", "month", "year"].indexOf(duration) < 0) {
