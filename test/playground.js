@@ -97,3 +97,4 @@ let d = dayjs(12);
 let dd = dayjs(12);
 console.log(dd === d);
 console.log(dd.valueOf() === d.valueOf());
+console.log(df.rollingPercentChange().toString());

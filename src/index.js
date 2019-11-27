@@ -462,7 +462,7 @@ Timeseries.prototype.totalColumns = totalRows;
 function rollingPercentChange(col = "value", decimal = true) {
 	let df = this;
 	let delta = df.withSeries("delta", df.getSeries("value").percentChange());
-	if (decimal) delta = data.transformSeries({ delta: value => value / 100 });
+	if (decimal) delta = delta.transformSeries({ delta: value => value / 100 });
 	return new Timeseries(delta);
 }
 
