@@ -1,6 +1,7 @@
 const dataForge = require("data-forge");
 require("data-forge-fs");
 const { Timeseries } = require("../dist/index");
+const fs = require("fs");
 const {
 	averageMonthlyMap,
 	fillMonthlyByMap,
@@ -40,6 +41,16 @@ async function testClean(meter) {
 	console.log(threshold);
 
 	let cleaned = df.removeOutliers(threshold);
+	fs.writeFileSync(
+		`../data/clean_${meter}_daily.csv`,
+		cleaned
+			.downsample(["day", 1])
+			.betweenDates(new Date(2015, 0), new Date(2019, 0, 0))
+			.subset(["date", "value"])
+			.where(row => row.value !== null && row.value !== 0)
+			.transformSeries({ date: d => d.format("YYYY-MM-DD") })
+			.toCSV()
+	);
 	console.log(
 		df.count(),
 		"# cleaned:",
@@ -92,6 +103,4 @@ async function testClean(meter) {
 }
 
 // testClean("233A01ME");
-// testClean("225A01ME");
-let d = new Timeseries([]);
-d.annualIntensity(10);
+testClean("225A01ME");
