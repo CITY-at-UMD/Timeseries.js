@@ -91,10 +91,13 @@ let df = new Timeseries(
 		value: Math.random() * 100
 	}))
 );
-console.log(df.at(new Date(2018, 0)));
-console.log(df.atDate(new Date(2018, 0)));
-let d = dayjs(12);
-let dd = dayjs(12);
-console.log(dd === d);
-console.log(dd.valueOf() === d.valueOf());
-console.log(df.rollingPercentChange().toString());
+
+let annual = new Timeseries(
+	new Array(4).fill(0).map((v, i) => ({
+		date: dayjs(new Date(2015 + i, 0)),
+		value: 100
+	}))
+);
+console.log(annual.toString());
+let monthly = annual.upsample(["month", 1], "average");
+console.log(monthly.toString());

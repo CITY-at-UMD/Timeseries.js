@@ -396,18 +396,25 @@ function downsampleClean([duration, value], threshold = 0.8) {
 	return new Timeseries(df);
 }
 Timeseries.prototype.downsampleClean = downsampleClean;
-function upsample([duration, value], fillType = "avg") {
+function upsample([duration, value], fillType = "average") {
 	// Dont use this b/c it has the raw and flag values
-	let df = this.fillGaps(
-		gapExists([duration, value]),
-		gapFill(fillType, [duration, value])
-	);
-	return new Timeseries(df);
+	let df = this;
+	let blank = Timeseries.blank(df.first().date, df.last().date, [
+		duration,
+		value
+	]);
+	console.log(blank.toString());
+	let n = Timeseries.merge([blank, df]).fillNull()
+	// let df = this.fillGaps(
+	// 	gapExists([duration, value]),
+	// 	gapFill(fillType, [duration, value])
+	// );
+	return new Timeseries(n);
 }
 
 Timeseries.prototype.upsample = upsample;
 
-function populate(value, type = "avg") {
+function populate(value, type = "average") {
 	let v;
 	switch (type) {
 		case "fill":

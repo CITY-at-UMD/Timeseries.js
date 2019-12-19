@@ -125,34 +125,36 @@ const gapFill = (
 };
 
 // Basic Fill Functions
-const averageMonthlyMap = df =>
-	new Map(
-		df
-			.group("month")
-			.select(group => ({
-				month: group.first().date.month(),
-				value: group
-					.getSeries("value")
-					.where(v => v)
-					.average()
-			}))
-			.toArray()
-			.map(({ month, value }) => [month, value])
-	);
-const annualMonthlyAverageMap = df =>
-	new Map(
-		df
-			.groupBy(row => row.date.year())
-			.select(group => {
-				const date = group.first().date.startOf("year");
-				let ts = new Timeseries(group).downsample(["month", 1], "avg");
-				let avg = ts.getSeries("value").average();
-				let map = averageMonthlyMap(ts);
-				map.set("avg", avg);
-				return [date.year(), map];
-			})
-			.toArray()
-	);
+const averageMonthlyMap = df => {
+	let data = df.group("month").select(group => ({
+		month: group.first().date.month(),
+		value: group
+			.getSeries("value")
+			.where(v => v)
+			.average()
+	}));
+	let m = new Map(data.toArray().map(({ month, value }) => [month, value]));
+	let avg = data.getSeries("value").average();
+	m.set("default", avg);
+	return m;
+};
+
+const annualMonthlyAverageMap = df => {
+	let data = df
+		.groupBy(row => row.date.year())
+		.select(group => {
+			const date = group.first().date.startOf("year");
+			let ts = new Timeseries(group).downsample(["month", 1], "avg");
+			let avg = ts.getSeries("value").average();
+			let map = averageMonthlyMap(ts);
+			map.set("avg", avg);
+			return [date.year(), map];
+		});
+	let m = new Map(data.toArray());
+	// let deafult =
+	return m;
+};
+
 const monthlyRollingAverageMap = (
 	df,
 	{ years = 3, series = "value", aggregator = "average", validOnly = true } = {}
