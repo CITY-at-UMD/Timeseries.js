@@ -11,8 +11,10 @@
 	},
 	"devDependencies": {
 		"@data-forge-plot/render": "^0.0.3",
+		"builtin-modules": "^3.1.0",
 		"data-forge-fs": "^0.0.6",
 		"data-forge-plot": "^0.6.3",
+		"is-module": "^1.0.0",
 		"jest": "^24.8.0",
 		"matplotnode": "^0.4.2",
 		"microbundle": "^0.12.0-next.6",

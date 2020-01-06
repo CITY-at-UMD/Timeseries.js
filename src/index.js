@@ -274,6 +274,36 @@ function reset() {
 }
 Timeseries.prototype.reset = reset;
 
+// To and From Totalizers
+function fromTotalizer(col = "value", { acceptInitial = false } = {}) {
+	let array = this.subset(["date", col])
+		.toArray()
+		.map((v, i, arr) => {
+			let val = acceptInitial ? v[col] : null;
+			if (arr[i - 1]) {
+				val = v[col] - arr[i - 1][col];
+			}
+			return { date: v.date, [col]: val };
+		});
+	let ndf = new Timeseries(a);
+	return ndf;
+}
+function toTotalizer(col, { adjustInitial } = {}) {
+	let array = this.subset(["date", col])
+		.toArray()
+		.map((v, i, arr) => {
+			let val = arr
+				.slice(0, i)
+				.map(obj => obj[col])
+				.reduce((a, b) => a + b, 0);
+			return { date: v.date, [col]: val };
+		});
+	let ndf = new Timeseries(a);
+	return ndf;
+}
+Timeseries.prototype.fromTotalizer = fromTotalizer;
+Timeseries.prototype.toTotalizer = toTotalizer;
+
 function group(interval, toArray) {
 	if (["hour", "day", "month", "year"].indexOf(interval) === -1)
 		throw new Error("interval type not supported");
@@ -404,7 +434,7 @@ function upsample([duration, value], fillType = "average") {
 		value
 	]);
 	console.log(blank.toString());
-	let n = Timeseries.merge([blank, df]).fillNull()
+	let n = Timeseries.merge([blank, df]).fillNull();
 	// let df = this.fillGaps(
 	// 	gapExists([duration, value]),
 	// 	gapFill(fillType, [duration, value])

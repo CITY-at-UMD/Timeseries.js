@@ -86,18 +86,19 @@ function testClean() {
 // testClean();
 
 let df = new Timeseries(
-	new Array(8760 * 4).fill(0).map((v, i) => ({
+	new Array(8760).fill(0).map((v, i) => ({
 		date: dayjs(new Date(2018, 0, 0, i)),
-		value: Math.random() * 100
+		total: i * 10,
+		value: 10
 	}))
 );
 
-let annual = new Timeseries(
-	new Array(4).fill(0).map((v, i) => ({
-		date: dayjs(new Date(2015 + i, 0)),
-		value: 100
-	}))
-);
-console.log(annual.toString());
-let monthly = annual.upsample(["month", 1], "average");
-console.log(monthly.toString());
+let t = df.toTotalizer("value");
+let v = df.fromTotalizer("total");
+
+console.log(df.head(10).toString());
+console.log(df.tail(10).toString());
+console.time("object");
+console.log(t.tail(10).toString());
+console.log(v.tail(10).toString());
+console.timeEnd("object");
