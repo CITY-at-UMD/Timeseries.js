@@ -433,12 +433,11 @@ function upsample([duration, value], fillType = "average") {
 		duration,
 		value
 	]);
-	console.log(blank.toString());
-	let n = Timeseries.merge([blank, df]).fillNull();
-	// let df = this.fillGaps(
-	// 	gapExists([duration, value]),
-	// 	gapFill(fillType, [duration, value])
-	// );
+	// let n = Timeseries.merge([blank, df]).fillNull();
+	let n = df.fillGaps(
+		gapExists([duration, value]),
+		gapFill(fillType, [duration, value])
+	);
 	return new Timeseries(n);
 }
 
