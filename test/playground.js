@@ -84,21 +84,15 @@ function testClean() {
 	);
 }
 // testClean();
-
-let df = new Timeseries(
-	new Array(8760).fill(0).map((v, i) => ({
-		date: dayjs(new Date(2018, 0, 0, i)),
-		total: i * 10,
-		value: 10
-	}))
-);
-
-let t = df.toTotalizer("value");
-let v = df.fromTotalizer("total");
-
-console.log(df.head(10).toString());
-console.log(df.tail(10).toString());
-console.time("object");
-console.log(t.tail(10).toString());
-console.log(v.tail(10).toString());
-console.timeEnd("object");
+let df = new Timeseries([
+	{
+		date: new Date(2010, 1),
+		value: 12
+	},
+	{ date: new Date(2020, 1), value: 122 }
+]);
+console.log(df.toString());
+let full = df.upsample(["year", 1], "interpolate");
+console.log(full.toString());
+let blank = Timeseries.blank(new Date(2003, 1), new Date(2020, 1), ["year", 1]);
+console.log(blank.toString());

@@ -426,18 +426,21 @@ function downsampleClean([duration, value], threshold = 0.8) {
 	return new Timeseries(df);
 }
 Timeseries.prototype.downsampleClean = downsampleClean;
-function upsample([duration, value], fillType = "average") {
+function upsample([duration, value], fillType = "average", flag = false) {
 	// Dont use this b/c it has the raw and flag values
 	let df = this;
-	let blank = Timeseries.blank(df.first().date, df.last().date, [
-		duration,
-		value
-	]);
+
+	// let blank = Timeseries.blank(df.first().date, df.last().date, [
+	// 	duration,
+	// 	value
+	// ]);
 	// let n = Timeseries.merge([blank, df]).fillNull();
+
 	let n = df.fillGaps(
 		gapExists([duration, value]),
 		gapFill(fillType, [duration, value])
 	);
+	if (!flag) n = n.dropSeries(["flag"]);
 	return new Timeseries(n);
 }
 
