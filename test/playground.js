@@ -83,16 +83,12 @@ function testClean() {
 		filled.getSeries("value").sum()
 	);
 }
-// testClean();
-let df = new Timeseries([
-	{
-		date: new Date(2010, 1),
-		value: 12
-	},
-	{ date: new Date(2020, 1), value: 122 }
-]);
+
+let df = new Timeseries(
+	new Array(12).fill(0).map((v, i) => ({
+		date: dayjs(new Date(2018, i)),
+		value: -6 + i
+	}))
+);
 console.log(df.toString());
-let full = df.upsample(["year", 1], "interpolate");
-console.log(full.toString());
-let blank = Timeseries.blank(new Date(2003, 1), new Date(2020, 1), ["year", 1]);
-console.log(blank.toString());
+console.log(df.rollingPercentChange().toString());

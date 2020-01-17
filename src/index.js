@@ -500,7 +500,16 @@ Timeseries.prototype.totalColumns = totalRows;
 // Baseline Functions
 function rollingPercentChange(col = "value", decimal = true) {
 	let df = this;
-	let delta = df.withSeries("delta", df.getSeries("value").percentChange());
+	let s = df
+		.getSeries(col)
+		.rollingWindow(2)
+		.select(window => {
+			let v = (window.last() - window.first()) / Math.abs(window.first());
+			return [window.getIndex().last(), v];
+		})
+		.withIndex(pair => pair[0])
+		.select(pair => pair[1]);
+	let delta = df.withSeries("delta", s);
 	if (decimal) delta = delta.transformSeries({ delta: value => value / 100 });
 	return new Timeseries(delta);
 }
