@@ -2175,10 +2175,10 @@ dashdash@^1.12.0:
   dependencies:
     assert-plus "^1.0.0"
 
-data-forge-fs@^0.0.6:
-  version "0.0.6"
-  resolved "https://registry.npmjs.org/data-forge-fs/-/data-forge-fs-0.0.6.tgz#40683660002065b2826bfa145a8bd52d978a3881"
-  integrity sha512-oTX8ofmbauqZGNeqCbniwlKwdKbM7SKYKAnUZmqL8YvU0U3l9njA6KuF2j68TAqAazzX4jvkn+Va/nwZCNctgQ==
+data-forge-fs@^0.0.7:
+  version "0.0.7"
+  resolved "https://registry.npmjs.org/data-forge-fs/-/data-forge-fs-0.0.7.tgz#49b5cb6fcb08683c3ddecb357be7c184a528eaec"
+  integrity sha512-Oo5ThILN/u5upuBOH/2OcgjKwyj3AhZKUKuJnxPBHFjGhdZN7LaPfOAjMkTvNOAU7AP3VvKV7KYNTWAeOG2L5A==
   dependencies:
     chai "^4.1.2"
 

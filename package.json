@@ -1,6 +1,6 @@
 {
 	"name": "Timeseries",
-	"version": "3.4.5",
+	"version": "3.4.6",
 	"license": "MIT",
 	"dependencies": {
 		"data-forge": "^1.7.5",
@@ -12,7 +12,7 @@
 	"devDependencies": {
 		"@data-forge-plot/render": "^0.0.3",
 		"builtin-modules": "^3.1.0",
-		"data-forge-fs": "^0.0.6",
+		"data-forge-fs": "^0.0.7",
 		"data-forge-plot": "^0.6.3",
 		"is-module": "^1.0.0",
 		"jest": "^24.8.0",

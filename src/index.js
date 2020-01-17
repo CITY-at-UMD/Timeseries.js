@@ -510,7 +510,7 @@ function rollingPercentChange(col = "value", decimal = true) {
 		.withIndex(pair => pair[0])
 		.select(pair => pair[1]);
 	let delta = df.withSeries("delta", s);
-	if (decimal) delta = delta.transformSeries({ delta: value => value / 100 });
+	if (!decimal) delta = delta.transformSeries({ delta: value => value * 100 });
 	return new Timeseries(delta);
 }
 
