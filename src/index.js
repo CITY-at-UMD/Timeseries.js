@@ -136,6 +136,14 @@ function nmbe(actual, simulated) {
 Timeseries.prototype.cvrsme = cvrsme;
 Timeseries.prototype.nmbe = nmbe;
 
+// Formatting
+function toCSV() {
+	let df = this.transformSeries({
+		date: date => dayjs(date).toISOString()
+	}).toCSV();
+	return df;
+}
+Timeseries.prototype.asCSV = toCSV;
 // Methods
 function calculateThresholdOptions({
 	k,
