@@ -8,6 +8,7 @@
 		"distributions": "^2.0.0",
 		"lodash": "^4.17.15",
 		"simple-statistics": "^7.1.0"
+
 	},
 	"devDependencies": {
 		"@data-forge-plot/render": "^0.0.3",
