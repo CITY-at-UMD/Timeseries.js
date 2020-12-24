@@ -3,21 +3,21 @@
 	"version": "3.4.6",
 	"license": "MIT",
 	"dependencies": {
-		"data-forge": "^1.7.5",
-		"dayjs": "^1.8.14",
+		"data-forge": "^1.8.8",
+		"dayjs": "^1.8.27",
 		"distributions": "^2.0.0",
 		"lodash": "^4.17.15",
-		"simple-statistics": "^7.0.2"
+		"simple-statistics": "^7.1.0"
 	},
 	"devDependencies": {
 		"@data-forge-plot/render": "^0.0.3",
 		"builtin-modules": "^3.1.0",
-		"data-forge-fs": "^0.0.7",
+		"data-forge-fs": "^0.0.8",
 		"data-forge-plot": "^0.6.3",
 		"is-module": "^1.0.0",
-		"jest": "^24.8.0",
+		"jest": "^26.0.1",
 		"matplotnode": "^0.4.2",
-		"microbundle": "^0.12.0-next.6",
+		"microbundle": "^0.12.0",
 		"node-fetch": "^2.6.0",
 		"readline-promise": "^1.0.4"
 	},

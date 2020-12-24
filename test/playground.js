@@ -85,10 +85,36 @@ function testClean() {
 }
 
 let df = new Timeseries(
-	new Array(12).fill(0).map((v, i) => ({
+	new Array(40).fill(0).map((v, i) => ({
 		date: dayjs(new Date(2018, i)),
 		value: -6 + i
 	}))
 );
+
+let annual = df
+	.rollingWindow(12)
+	.select(window => {
+		return {
+			date: window.last().date,
+			value: window.getSeries("value").average()
+		};
+	})
+	.inflate()
+	.withIndex(row => row.date.toDate());
+annual = new Timeseries(annual);
 console.log(df.toString());
-console.log(df.rollingPercentChange().toString());
+console.log(annual.toString());
+console.log(df.downsample(["year", 1], "avg").toString());
+console.log(annual.downsample(["year", 1], "avg").toString());
+
+let ann = annual
+	.groupBy(row => row.date.year())
+	.select(group => {
+		return {
+			date: group.first().date.startOf("year"),
+			value: group.last().value
+		};
+	})
+	.inflate()
+	.withIndex(row => row.date.toDate());
+console.log(ann.toString());

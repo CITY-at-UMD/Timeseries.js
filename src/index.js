@@ -305,7 +305,7 @@ Timeseries.prototype.fromTotalizer = fromTotalizer;
 Timeseries.prototype.toTotalizer = toTotalizer;
 
 function group(interval, toArray) {
-	if (["hour", "day", "month", "year"].indexOf(interval) === -1)
+	if (["hour", "day", "week", "month", "year"].indexOf(interval) === -1)
 		throw new Error("interval type not supported");
 	let dateComparison = row => dayjs(row.date).startOf(interval);
 	let groups = this.groupBy(dateComparison);
