@@ -6,7 +6,7 @@
 		"data-forge": "^1.7.5",
 		"dayjs": "^1.8.14",
 		"distributions": "^2.0.0",
-		"lodash": "^4.17.15",
+		"lodash": "^4.17.21",
 		"simple-statistics": "^7.0.2"
 	},
 	"devDependencies": {
